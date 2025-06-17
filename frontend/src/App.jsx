@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useMatch } from "react-router-dom"; // ✅ correct
 import { Signup } from './pages/Signup';
-import { Signin } from './pages/SignIn';
+import { Signin } from './pages/Signin';
 import LandingPage from "./pages/LandingPage";
 import AppBar from "./components/AppBar";
 import ProjectManager from "./pages/MyProjects";
