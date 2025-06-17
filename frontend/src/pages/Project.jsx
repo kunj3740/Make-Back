@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import DiagramViewer from "../components/Table"
 import axios from "axios"
 import { BACKEND_URL } from "../config"
-import { useParams } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import { AlertCircle, Database, Plus, Settings, BarChart3, FileText } from "lucide-react"
 import FolderManagement from "../components/FolderManagement"
 
@@ -11,6 +11,7 @@ export const Project = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const { projectId } = useParams()
+  const Navigate = useNavigate();
 
   useEffect(() => {
     const fetchDiagram = async () => {
@@ -60,7 +61,7 @@ export const Project = () => {
   }, [projectId])
 
   const handleEditSchema = () => {
-    window.location.href = `/projects/${projectId}/editor`
+    Navigate(`/projects/${projectId}/editor`);
   }
 
   if (loading) {
