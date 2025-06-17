@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { Database, Key, Link, Edit3, Move, RotateCcw, Maximize2, Minimize2 } from "lucide-react"
 import axios from "axios"
 import { BACKEND_URL } from "../config"
+import { Link } from "react-router-dom"
 
 const DiagramViewer = ({ entities = [], projectId, onEditSchema }) => {
   const [diagramEntities, setDiagramEntities] = useState([])
@@ -228,12 +229,12 @@ const DiagramViewer = ({ entities = [], projectId, onEditSchema }) => {
               Create your database schema to visualize your data structure and relationships.
             </p>
             {onEditSchema && (
-              <button
-                onClick={onEditSchema}
+              <Link
+                to={`/projects/${projectId}/editor`}
                 className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg font-medium transition-all duration-200 shadow-lg hover:shadow-blue-500/25"
               >
                 Create Schema
-              </button>
+              </Link>
             )}
           </div>
         </div>
@@ -298,13 +299,13 @@ const DiagramViewer = ({ entities = [], projectId, onEditSchema }) => {
             </button>
 
             {onEditSchema && (
-              <button
-                onClick={onEditSchema}
+              <Link
+                to={`/projects/${projectId}/editor`}
                 className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg font-medium transition-all duration-200 shadow-lg hover:shadow-blue-500/25 flex items-center gap-2"
               >
                 <Edit3 className="w-4 h-4" />
                 Edit Schema
-              </button>
+              </Link>
             )}
           </div>
         </div>
