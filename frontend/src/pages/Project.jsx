@@ -81,27 +81,7 @@ export const Project = () => {
     )
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-900 pt-20 px-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center p-8">
-              <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-red-300 mb-2">Error Loading Project</h2>
-              <p className="text-red-200 mb-4">{error}</p>
-              <button
-                onClick={() => window.location.reload()}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-              >
-                Retry
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  
 
   return (
     <div className="min-h-screen bg-gray-900 pt-20">
