@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "dev": "node app.js",
+    "dev": "nodemon app.js",
     "start": "node app.js",
     "build": "echo 'No build needed for JavaScript project'"
   },
