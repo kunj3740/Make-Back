@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Database, Key, Link, Edit3, Move, RotateCcw, Maximize2, Minimize2 } from "lucide-react"
+import { Database, Key, Edit3, Move, RotateCcw, Maximize2, Minimize2 } from "lucide-react"
 import axios from "axios"
 import { BACKEND_URL } from "../config"
 import { Link } from "react-router-dom"

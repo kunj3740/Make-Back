@@ -10,6 +10,7 @@ export const Project = () => {
   const [entities, setEntities] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [activeTab, setActiveTab] = useState('schema') // New state for active tab
   const { projectId } = useParams()
   const Navigate = useNavigate();
 
@@ -81,24 +82,58 @@ export const Project = () => {
       </div>
     )
   }
-
-  
-
+       
   return (
     <div className="min-h-screen bg-gray-900 pt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
+        {/* Tab Navigation */}
+        <div className="mb-8">
+          <div className="border-b border-gray-700">
+            <nav className="-mb-px flex space-x-8">
+              <button
+                onClick={() => setActiveTab('schema')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center gap-2 ${
+                  activeTab === 'schema'
+                    ? 'border-blue-500 text-blue-400'
+                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600'
+                }`}
+              >
+                <Database className="w-4 h-4" />
+                Schema
+              </button>
+              <button
+                onClick={() => setActiveTab('apis')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center gap-2 ${
+                  activeTab === 'apis'
+                    ? 'border-blue-500 text-blue-400'
+                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600'
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                APIs
+              </button>
+            </nav>
+          </div>
+        </div>
 
-        <div className="mb-8 border border-slate-500 rounded-xl">
-          <DiagramViewer entities={entities} projectId={projectId || ""} onEditSchema={handleEditSchema} />
+        {/* Tab Content */}
+        <div className="mb-8">
+          {activeTab === 'schema' && (
+            <div className="border border-slate-500 rounded-xl">
+              <DiagramViewer entities={entities} projectId={projectId || ""} onEditSchema={handleEditSchema} />
+            </div>
+          )}
+          
+          {activeTab === 'apis' && (
+            <div>
+              <FolderManagement projectId={projectId}/>
+            </div>
+          )}
         </div>
 
         <div className="h-[100px]"></div>
-
-        <div>
-          <FolderManagement projectId={projectId}/>
-        </div>
-        
+               
       </div>
     </div>
   )

@@ -1,9 +1,10 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Plus, Save, Trash2, Database, Loader, Key, Type, Hash, Calendar, ToggleLeft, FileText, Link, Move } from 'lucide-react';
+import { Plus, Save, Trash2, Database, Loader, Key, Type, Hash, Calendar, ToggleLeft, FileText, Move, ArrowLeft } from 'lucide-react';
 import axios from 'axios';
 import { BACKEND_URL } from '../config';
 import { Bot } from 'lucide-react';
 import AIChatbot from './AIchatBot';
+import { Link } from 'react-router-dom'
 
 const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
   const [entities, setEntities] = useState([]);
@@ -777,44 +778,73 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
     // </div>
      <div className="h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white overflow-hidden flex flex-col">
       {/* Enhanced Header */}
-      <div className="bg-slate-800/80 backdrop-blur-sm border-b border-slate-700/50 p-4 flex items-center justify-between flex-shrink-0 shadow-lg">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg">
-            <Database className="w-5 h-5 text-white" />
+      <div className="bg-gradient-to-r from-slate-900/95 via-slate-800/95 to-slate-900/95 backdrop-blur-md border-b border-slate-700/50 p-6 flex items-center justify-between flex-shrink-0 shadow-2xl relative overflow-hidden">
+        {/* Animated background elements */}
+        <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 via-transparent to-purple-500/5"></div>
+        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent"></div>
+        
+        <div className="flex items-center space-x-4 relative z-10">
+          {/* Back Button - Positioned at the very start */}
+          <Link 
+            to={`/projects/${currentProjectId}`}
+            className="group p-2 bg-slate-700/50 hover:bg-slate-600/60 rounded-lg flex items-center justify-center transition-all duration-200 hover:scale-105 ring-1 ring-slate-600/30 hover:ring-slate-500/50"
+            title="Back to Projects"
+          >
+            <ArrowLeft className="w-5 h-5 text-slate-300 group-hover:text-white group-hover:-translate-x-0.5 transition-all duration-200" />
+          </Link>
+
+          <div className="p-3 bg-gradient-to-br from-cyan-400 via-cyan-500 to-blue-600 rounded-xl shadow-lg shadow-cyan-500/25 ring-2 ring-cyan-400/20">
+            <Database className="w-6 h-6 text-white drop-shadow-sm" />
           </div>
-          <div>
-            <h1 className="text-lg font-bold text-white">Database Designer</h1>
-            <p className="text-xs text-slate-400">Visual ER Diagram Editor</p>
+          <div className="flex flex-col">
+            <h1 className="text-xl font-bold bg-gradient-to-r from-white to-slate-200 bg-clip-text text-transparent">
+              Database Designer
+            </h1>
+            <p className="text-sm text-slate-400 font-medium tracking-wide">Visual ER Diagram Editor</p>
           </div>
-          {isLoading && <Loader className="w-4 h-4 animate-spin text-cyan-400" />}
+          {isLoading && (
+            <div className="flex items-center space-x-2 bg-slate-800/60 px-3 py-1.5 rounded-full border border-slate-700/50">
+              <Loader className="w-4 h-4 animate-spin text-cyan-400" />
+              <span className="text-xs text-slate-300 font-medium">Processing...</span>
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center space-x-2">
-          {/* AI Chatbot Button */}
+        <div className="flex items-center space-x-3 relative z-10">
+          {/* Enhanced AI Generate Button */}
           <button
             onClick={() => setShowAIChatbot(true)}
-            className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 px-4 py-2 rounded-lg flex items-center space-x-2 transition-all duration-200 shadow-lg hover:shadow-purple-500/25"
+            className="group bg-gradient-to-r from-purple-500 via-violet-600 to-purple-600 hover:from-purple-400 hover:via-violet-500 hover:to-purple-500 px-5 py-2.5 rounded-xl flex items-center space-x-2 transition-all duration-300 shadow-xl hover:shadow-purple-500/30 ring-1 ring-purple-400/20 hover:ring-purple-400/40 hover:scale-105 font-medium text-white relative overflow-hidden"
             title="AI Schema Generator"
           >
-            <Bot className="w-4 h-4" />
-            <span className="font-medium">AI Generate</span>
+            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 -skew-x-12 translate-x-[-100%] group-hover:translate-x-[200%] transition-transform duration-700"></div>
+            <Bot className="w-4 h-4 group-hover:rotate-12 transition-transform duration-200 relative z-10" />
+            <span className="relative z-10">AI Generate</span>
           </button>
-          
+
+          {/* Enhanced Add Entity Button */}
           <button
             onClick={addEntity}
-            className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 px-4 py-2 rounded-lg flex items-center space-x-2 transition-all duration-200 shadow-lg hover:shadow-cyan-500/25"
+            className="group bg-gradient-to-r from-cyan-500 via-blue-500 to-cyan-600 hover:from-cyan-400 hover:via-blue-400 hover:to-cyan-500 px-5 py-2.5 rounded-xl flex items-center space-x-2 transition-all duration-300 shadow-xl hover:shadow-cyan-500/30 ring-1 ring-cyan-400/20 hover:ring-cyan-400/40 hover:scale-105 font-medium text-white relative overflow-hidden"
           >
-            <Plus className="w-4 h-4" />
-            <span className="font-medium">Add Entity</span>
+            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 -skew-x-12 translate-x-[-100%] group-hover:translate-x-[200%] transition-transform duration-700"></div>
+            <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-200 relative z-10" />
+            <span className="relative z-10">Add Entity</span>
           </button>
-          
+
+          {/* Enhanced Save Button */}
           <button
             onClick={saveProject}
             disabled={isSaving}
-            className="bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 disabled:from-emerald-700 disabled:to-green-700 disabled:cursor-not-allowed px-4 py-2 rounded-lg flex items-center space-x-2 transition-all duration-200 shadow-lg hover:shadow-emerald-500/25"
+            className="group bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-400 hover:via-green-400 hover:to-emerald-500 disabled:from-emerald-700 disabled:via-green-700 disabled:to-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 px-5 py-2.5 rounded-xl flex items-center space-x-2 transition-all duration-300 shadow-xl hover:shadow-emerald-500/30 ring-1 ring-emerald-400/20 hover:ring-emerald-400/40 hover:scale-105 disabled:hover:scale-100 font-medium text-white relative overflow-hidden"
           >
-            {isSaving ? <Loader className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            <span className="font-medium">{isSaving ? "Saving..." : "Save"}</span>
+            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 -skew-x-12 translate-x-[-100%] group-hover:translate-x-[200%] transition-transform duration-700"></div>
+            {isSaving ? (
+              <Loader className="w-4 h-4 animate-spin relative z-10" />
+            ) : (
+              <Save className="w-4 h-4 group-hover:scale-110 transition-transform duration-200 relative z-10" />
+            )}
+            <span className="relative z-10">{isSaving ? "Saving..." : "Save"}</span>
           </button>
         </div>
       </div>

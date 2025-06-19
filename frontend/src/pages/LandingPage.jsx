@@ -17,8 +17,12 @@ import {
 
 export default function LandingPage() {
   const [isVisible, setIsVisible] = useState(false)
-
+  const [token , setToken] = useState("");
   useEffect(() => {
+    const jwt = localStorage.getItem("token");
+    if( jwt ){
+      setToken(jwt)
+    }
     setIsVisible(true)
   }, [])
 
@@ -122,7 +126,16 @@ export default function LandingPage() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
-              <Link to="/signup">
+              
+              { !token ?  <Link to="/signup">
+                <Button
+                  size="lg"
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white border-0 shadow-xl hover:shadow-blue-500/25 transition-all duration-200 transform hover:scale-105 px-8 py-6 text-lg"
+                >
+                  Start Building Free
+                  <ArrowRight className="w-5 h-5 ml-2" />
+                </Button>
+              </Link> : <Link to="/projects">
                 <Button
                   size="lg"
                   className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white border-0 shadow-xl hover:shadow-blue-500/25 transition-all duration-200 transform hover:scale-105 px-8 py-6 text-lg"
@@ -131,6 +144,7 @@ export default function LandingPage() {
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               </Link>
+               }
               <Link to="#demo">
                 <Button
                   size="lg"
