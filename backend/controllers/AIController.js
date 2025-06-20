@@ -211,6 +211,7 @@ Rules:
 - Use lowercase route naming convention.
 - Consider the database entities provided for proper data modeling.
 - Use appropriate HTTP status codes and error handling.
+- the given json format api is just an example make it as users want 
 
 Note: only give one testcase for success only just the inputs for as per given example
 
