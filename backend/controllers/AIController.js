@@ -121,7 +121,7 @@ Generate a comprehensive database schema based on the user's requirements.`;
 const generateAPI = async (req, res) => {
   try {
     const { prompt, folderId, projectId } = req.body;
-
+    console.log(prompt);
     if (!prompt) {
       return res.status(400).json({
         error: 'Prompt is required'
