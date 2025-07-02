@@ -132,8 +132,9 @@ jobs:
       - name: Deploy to EC2
         run: |
           ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
-            cd /make-back/backend
+            cd /make-back
             git pull origin main
+            cd /backend
             docker compose down
             docker-compose up  --build
           EOF
