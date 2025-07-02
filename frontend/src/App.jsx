@@ -5,7 +5,7 @@ import LandingPage from "./pages/LandingPage";
 import AppBar from "./components/AppBar";
 import ProjectManager from "./pages/MyProjects";
 import { Editor } from "./pages/Editor";
-// import { Project } from "./pages/Project";
+import { Project } from "./pages/Project";
 
 function App() {
   const location = useLocation()
