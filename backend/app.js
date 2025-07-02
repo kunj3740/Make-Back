@@ -19,7 +19,7 @@ app.use(express.json())
 app.use('/api/v1/user', authRoutes)
 app.use('/api/v1/projects', projectRoutes)
 app.use('/api/v1/diagrams' , diagramRoutes)
-// app.use('/api/v1/folders' , folderRoutes)
+app.use('/api/v1/folders' , folderRoutes)
 
 app.use('/api/ai', AIRoutes);
 
