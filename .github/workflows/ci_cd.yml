@@ -1,87 +1,3 @@
-# name: CI for Node.js Docker Backend
-
-# on:
-#   push:
-#     branches:
-#       - main
-#   pull_request:
-
-# jobs:
-#   build-and-test:
-#     runs-on: ubuntu-latest
-
-#     steps:
-#       - name: Checkout repository
-#         uses: actions/checkout@v3
-
-#       - name: Set up Docker Buildx
-#         uses: docker/setup-buildx-action@v3
-
-#       - name: Cache Docker layers
-#         uses: actions/cache@v3
-#         with:
-#           path: /tmp/.buildx-cache
-#           key: ${{ runner.os }}-buildx-${{ github.sha }}
-#           restore-keys: |
-#             ${{ runner.os }}-buildx-
-
-#       - name: Build Docker image
-#         run: docker compose build
-
-#       - name: Start services
-#         run: docker compose up -d --build
-
-#       - name: Wait for backend to be healthy
-#         run: |
-#           echo "Waiting for backend to be ready..."
-#           for i in {1..10}; do
-#             if curl -s http://localhost:8000/health || curl -s http://localhost:8000; then
-#               echo "Backend is up!"
-#               exit 0
-#             fi
-#             echo "Not ready yet. Retrying in 3s..."
-#             sleep 3
-#           done
-#           echo "Backend failed to start!"
-#           exit 1
-
-#       - name: Shut down services
-#         if: always()
-#         run: docker compose down
-
-# name: Lint and Format Check
-
-# on:
-#   pull_request:
-#     branches:
-#       - '**'
-
-# jobs:
-#   lint-and-build:
-#     name: Lint and Build Check
-#     runs-on: ubuntu-latest
-
-#     steps:
-#       - name: Checkout code
-#         uses: actions/checkout@v3
-
-#       - name: Set up Node.js
-#         uses: actions/setup-node@v3
-#         with:
-#           node-version: '18'
-
-#       - name: Install backend dependencies
-#         run: npm install
-#         working-directory: ./backend
-
-#       - name: Install frontend dependencies
-#         run: npm install
-#         working-directory: ./frontend
-
-#       - name: Build frontend
-#         run: npm run build
-#         working-directory: ./frontend
-
 name: CI and CD Pipeline
 
 on:
@@ -118,16 +34,11 @@ jobs:
   deploy:
     name: Deploy to EC2
     runs-on: ubuntu-latest
-    needs: lint-and-build  # Only runs if CI job passes
+    needs: lint-and-build  
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
-      # - name: Set up SSH
-      #   uses: webfactory/ssh-agent@v0.7.0
-      #   with:
-      #     ssh-private-key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
 
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@master
