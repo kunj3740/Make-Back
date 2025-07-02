@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Docker/Dockerfile
+    container_name: backend-container
+    ports:
+      - "8000:8000"  # change if your app uses a different port
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: node app.js
