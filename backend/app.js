@@ -19,7 +19,7 @@ app.use(express.json())
 app.use('/api/v1/user', authRoutes)
 app.use('/api/v1/projects', projectRoutes)
 app.use('/api/v1/diagrams' , diagramRoutes)
-app.use('/api/v1/folders' , folderRoutes)
+// app.use('/api/v1/folders' , folderRoutes)
 
 app.use('/api/ai', AIRoutes);
 
@@ -30,7 +30,7 @@ mongoose.connect(process.env.DATABASE_URL, {
 })
 .then(() => {
   console.log('Connected to MongoDB')
-  app.listen(PORT, () => console.log(`Server running on port ${PORT}`))
+  app.listen(PORT, () => console.log(`Server running on Port ${PORT}`))
 
 })
 .catch((err) => {
