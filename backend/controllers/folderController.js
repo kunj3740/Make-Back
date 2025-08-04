@@ -6,7 +6,7 @@ const Project = require('../models/Project');
 // Create new folder
 const createFolder = async (req, res) => {
   try {
-    const { name, description, projectId } = req.body;
+    const { name, description, projectId , commonPrompt } = req.body;
     // Verify project ownership
     const project = await Project.findOne({
       _id: projectId,
@@ -39,7 +39,8 @@ const createFolder = async (req, res) => {
       description,
       projectId,
       userId: req.userId,
-      apis: []
+      apis: [],
+      commonPrompt 
     });
 
     await folder.save();
