@@ -6,6 +6,7 @@ import AppBar from "./components/AppBar";
 import ProjectManager from "./pages/MyProjects";
 import { Editor } from "./pages/Editor";
 import { Project } from "./pages/Project";
+import ReactPlayground from "./pages/ReactPlayground";
 
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
        
           <Routes>
             <Route path="/" element={<LandingPage />} />
+            <Route path="/editor" element={<ReactPlayground />} />
             <Route path="/projects" element={<ProjectManager />} />
             <Route path="/projects/:projectId" element={<Project />} />
             <Route path="/projects/:id/editor" element={<Editor />} />

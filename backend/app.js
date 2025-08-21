@@ -7,6 +7,7 @@ const projectRoutes = require("./routes/projectRoutes");
 const diagramRoutes = require("./routes/diagramRoutes");
 const AIRoutes = require("./routes/AIroutes");
 const folderRoutes = require("./routes/folderRoutes");
+const CompoGenRoutes = require("./routes/CompoGenRoutes");
 
 dotenv.config()
 
@@ -20,8 +21,8 @@ app.use('/api/v1/user', authRoutes)
 app.use('/api/v1/projects', projectRoutes)
 app.use('/api/v1/diagrams' , diagramRoutes)
 app.use('/api/v1/folders' , folderRoutes)
-
 app.use('/api/ai', AIRoutes);
+app.use('/api/v1/frontend' , CompoGenRoutes)
 
 // MongoDB connection
 mongoose.connect(process.env.DATABASE_URL, {

@@ -244,36 +244,46 @@ const DiagramViewer = ({ entities = [], projectId, onEditSchema }) => {
 
   return (
     <div
-      className={`bg-gray-900 rounded-xl border border-gray-700 overflow-hidden ${isFullscreen ? "fixed inset-4 z-50" : ""}`}
+      className={`bg-gray-900 rounded-xl border border-gray-900 overflow-hidden ${isFullscreen ? "fixed inset-4 z-50" : ""}`}
     >
       {/* Header with Controls */}
-      <div className="bg-gray-800 border-b border-gray-700 px-6 py-4">
-        <div className="flex items-center justify-between">
+      <div className="relative bg-gradient-to-r from-slate-900/90 via-slate-800/90 to-slate-900/90 backdrop-blur-xl border-b border-slate-700/50 px-6 py-4">
+        {/* Subtle cyan-purple overlay */}
+        <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 via-transparent to-purple-500/5"></div>
+
+        <div className="relative flex items-center justify-between">
+          {/* Left side */}
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <Database className="w-4 h-4 text-white" />
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-br from-cyan-900 to-purple-900 rounded-lg blur opacity-30"></div>
+                <div className="relative w-10 h-10 bg-gradient-to-br from-cyan-900/30 to-purple-900/30 rounded-lg flex items-center justify-center border border-slate-700/50">
+                  <Database className="w-5 h-5 text-cyan-400" />
+                </div>
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">Database Schema</h2>
-                <div className="flex items-center gap-4 text-sm text-gray-400">
+                <h2 className="text-xl font-bold bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+                  Database Schema
+                </h2>
+                <div className="flex items-center gap-4 text-sm text-slate-400">
                   <span>Project: {projectName}</span>
-                  <div className="h-3 w-px bg-gray-600"></div>
+                  <div className="h-3 w-px bg-slate-700"></div>
                   <span>{diagramEntities.length} table</span>
                 </div>
               </div>
             </div>
           </div>
 
+          {/* Right side */}
           <div className="flex items-center gap-3">
             {/* Layout Controls */}
-            <div className="flex items-center gap-2 border-r border-gray-600 pr-3">
+            <div className="flex items-center gap-2 border-r border-slate-700/50 pr-3">
               <button
                 onClick={() => setEditMode(!editMode)}
-                className={`px-3 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 ${
+                className={`px-3 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 shadow-md ${
                   editMode
-                    ? "bg-green-600 hover:bg-green-700 text-white shadow-lg"
-                    : "bg-gray-700 hover:bg-gray-600 text-gray-300"
+                    ? "bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white shadow-emerald-500/25"
+                    : "bg-slate-800/50 hover:bg-slate-700/50 text-slate-300 border border-slate-700/50"
                 }`}
               >
                 <Move className="w-4 h-4" />
@@ -281,7 +291,7 @@ const DiagramViewer = ({ entities = [], projectId, onEditSchema }) => {
               </button>
               <button
                 onClick={autoArrange}
-                className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg font-medium transition-colors flex items-center gap-2"
+                className="px-3 py-2 bg-slate-800/50 hover:bg-slate-700/50 text-slate-300 rounded-lg font-medium transition-colors flex items-center gap-2 border border-slate-700/50"
                 title="Auto-arrange tables"
               >
                 <RotateCcw className="w-4 h-4" />
@@ -292,16 +302,20 @@ const DiagramViewer = ({ entities = [], projectId, onEditSchema }) => {
             {/* Action Controls */}
             <button
               onClick={() => setIsFullscreen(!isFullscreen)}
-              className="p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-gray-700"
+              className="p-2 text-slate-400 hover:text-white transition-colors rounded-lg hover:bg-slate-700/50"
               title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
             >
-              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              {isFullscreen ? (
+                <Minimize2 className="w-4 h-4" />
+              ) : (
+                <Maximize2 className="w-4 h-4" />
+              )}
             </button>
 
             {onEditSchema && (
               <Link
                 to={`/projects/${projectId}/editor`}
-                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg font-medium transition-all duration-200 shadow-lg hover:shadow-blue-500/25 flex items-center gap-2"
+                className="px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white rounded-lg font-medium transition-all duration-200 shadow-lg shadow-purple-500/25 flex items-center gap-2"
               >
                 <Edit3 className="w-4 h-4" />
                 Edit Schema
@@ -310,6 +324,7 @@ const DiagramViewer = ({ entities = [], projectId, onEditSchema }) => {
           </div>
         </div>
 
+        {/* Edit mode hint */}
         {editMode && (
           <div className="mt-3 text-sm text-yellow-400 flex items-center gap-2 bg-yellow-400/10 px-3 py-2 rounded-lg border border-yellow-400/20">
             <Move className="w-4 h-4" />
@@ -317,11 +332,10 @@ const DiagramViewer = ({ entities = [], projectId, onEditSchema }) => {
           </div>
         )}
       </div>
-
       {/* Diagram Canvas */}
       <div
         ref={canvasRef}
-        className="overflow-auto bg-gray-900"
+        className="overflow-auto bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950"
         style={{ height: isFullscreen ? "calc(100vh - 200px)" : "600px" }}
       >
         <div className="relative min-w-[1200px] min-h-[600px] p-8">
