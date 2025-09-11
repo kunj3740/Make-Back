@@ -1,8 +1,7 @@
-"use client"
-
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import axios from "axios"
+import toast from "react-hot-toast"
 import { BACKEND_URL } from "../config"
 import { Plus, Edit3, Trash2, Save, X, FolderOpen, Search, Calendar, User } from "lucide-react"
 
@@ -66,7 +65,7 @@ export default function ProjectManager() {
       const res = await axios.get(`${BACKEND_URL}/api/v1/projects`, { headers })
       setProjects(res.data)
     } catch (err) {
-      console.error("Error fetching projects:", err.response?.data || err.message)
+      toast.error(err.response?.data?.message || "Error fetching projects")
     } finally {
       setIsLoading(false)
     }
@@ -78,7 +77,7 @@ export default function ProjectManager() {
 
   // POST new project
   const handleCreate = async () => {
-    if (!newProject.name.trim()) return
+    if (!newProject.name.trim() || !newProject.description.trim() ) return
     setIsLoading(true)
     try {
       const res = await axios.post(`${BACKEND_URL}/api/v1/projects`, newProject, { headers })
@@ -86,7 +85,7 @@ export default function ProjectManager() {
       setNewProject({ name: "", description: "" })
       setShowCreateModal(false)
     } catch (err) {
-      console.error("Error creating project:", err.response?.data || err.message)
+      toast.error(err.response?.data?.message || "Error creating project")
     } finally {
       setIsLoading(false)
     }
@@ -109,7 +108,7 @@ export default function ProjectManager() {
       setEditProject(null)
       setShowEditModal(false)
     } catch (err) {
-      console.error("Error updating project:", err.response?.data || err.message)
+      toast.error(err.response?.data?.message || "Error updating project")
     } finally {
       setIsLoading(false)
     }
@@ -123,7 +122,7 @@ export default function ProjectManager() {
         await axios.delete(`${BACKEND_URL}/api/v1/projects/${id}`, { headers })
         setProjects(projects.filter((p) => p._id !== id))
       } catch (err) {
-        console.error("Error deleting project:", err.response?.data || err.message)
+        toast.error(err.response?.data?.message || "Error deleting project")
       } finally {
         setIsLoading(false)
       }
@@ -217,7 +216,7 @@ export default function ProjectManager() {
                 }}
               >
                 {/* Gradient Border Effect */}
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 via-purple-600/20 to-emerald-600/20 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 -z-10"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 via-purple-600/20 to-emerald-600/20 rounded-2xl opacity-0  transition-opacity duration-300 -z-10"></div>
                 
                 <div className="flex justify-between items-start mb-6">
                   <div className="flex-1 min-w-0">
@@ -310,6 +309,7 @@ export default function ProjectManager() {
                   onChange={(e) => setNewProject((prev) => ({ ...prev, description: e.target.value }))}
                   placeholder="Describe your project"
                   rows={4}
+                  required
                   className="w-full px-4 py-3.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none resize-none backdrop-blur-sm transition-all duration-200"
                 />
               </div>

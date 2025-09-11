@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Bot, Loader, Sparkles, Database, Copy, Check, AlertCircle } from 'lucide-react';
 import { BACKEND_URL } from '../config';
 
-const AIChatbot = ({ isOpen, onClose, onGenerateDiagram, entities, setEntities }) => {
+const AIChatbot = ({ isOpen, onClose, onGenerateDiagram, entities, setEntities , projectId }) => {
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -77,7 +77,8 @@ const AIChatbot = ({ isOpen, onClose, onGenerateDiagram, entities, setEntities }
     try {
       // Prepare the request payload with existing entities as context
       const requestPayload = {
-        prompt: currentPrompt
+        prompt: currentPrompt,
+        projectId : projectId
       };
 
       // Add existing entities as context if they exist

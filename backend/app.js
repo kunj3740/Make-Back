@@ -22,7 +22,7 @@ app.use('/api/v1/projects', projectRoutes)
 app.use('/api/v1/diagrams' , diagramRoutes)
 app.use('/api/v1/folders' , folderRoutes)
 app.use('/api/ai', AIRoutes);
-app.use('/api/v1/frontend' , CompoGenRoutes)
+app.use('/api/v1/components' , CompoGenRoutes)
 
 // MongoDB connection
 mongoose.connect(process.env.DATABASE_URL, {

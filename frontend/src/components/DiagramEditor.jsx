@@ -25,7 +25,7 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
   const [connectionStart, setConnectionStart] = useState(null);
   const [connectionEnd, setConnectionEnd] = useState(null);
   const [tempConnectionPath, setTempConnectionPath] = useState(null);
-  
+  const [InStateProjectId , setInStateProjectId ] = useState("");
   const canvasRef = useRef(null);
 
   // Function to get userId from token if not provided as prop
@@ -69,6 +69,7 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
 
   // Initialize IDs on component mount
   useEffect(() => {
+    setInStateProjectId(projectId);
     const resolvedUserId = getUserIdFromToken();
     const resolvedProjectId = getProjectIdFromParams();
     
@@ -911,6 +912,7 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
           }}
           entities={entities}
           setEntities={setEntities}
+          projectId={currentProjectId}
         />
       )}
     </div>

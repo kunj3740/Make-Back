@@ -1,3 +1,4 @@
+
 const Project = require('../models/Project')
 const User = require('../models/User')
 
@@ -5,6 +6,12 @@ const User = require('../models/User')
 exports.createProject = async (req, res) => {
   const { name, description } = req.body
   try {
+    // Check if project name already exists for this user
+    const existingProject = await Project.findOne({ name, owner: req.userId })
+    if (existingProject) {
+      return res.status(400).json({ message: 'Project name already exists' })
+    }
+
     const project = new Project({ name, description, owner: req.userId })
     await project.save()
 
@@ -28,22 +35,29 @@ exports.getProjects = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: err.message })
   }
 }
-// Get projects by projectId
 
+// Get project by projectId
 exports.getProjectsById = async (req, res) => {
-  const { id } = req.params;
+  const { id } = req.params
   try {
-    const projects = await Project.findById(id);
-    res.status(200).json(projects)
+    const project = await Project.findById(id)
+    res.status(200).json(project)
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message })
   }
 }
+
 // Update a project
 exports.updateProject = async (req, res) => {
   const { id } = req.params
   const { name, description } = req.body
   try {
+    // Check if another project with same name exists for this user
+    const existingProject = await Project.findOne({ name, owner: req.userId, _id: { $ne: id } })
+    if (existingProject) {
+      return res.status(400).json({ message: 'Project name already exists' })
+    }
+
     const project = await Project.findOneAndUpdate(
       { _id: id, owner: req.userId },
       { name, description },

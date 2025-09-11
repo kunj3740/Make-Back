@@ -435,7 +435,7 @@ const FolderManagement = ({
 
               {currentView === "apis" && (
                 <>
-                  <button
+                  {/* <button
                     onClick={() => setShowAIGenerator(true)}
                     className="group relative px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-medium transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/25 text-sm"
                   >
@@ -443,8 +443,8 @@ const FolderManagement = ({
                       <Sparkles className="h-4 w-4" />
                       <span>AI Generate</span>
                     </div>
-                  </button>
-                  <button
+                  </button> */}
+                  {/* <button
                     onClick={() => {
                       setCommonPrompt(selectedFolder?.commonPrompt || "")
                       setShowCommonPromptModal(true)
@@ -455,7 +455,7 @@ const FolderManagement = ({
                       <FileCode className="h-4 w-4" />
                       <span>Common Prompt</span>
                     </div>
-                  </button>
+                  </button> */}
                 </>
               )}
             </div>
@@ -479,7 +479,7 @@ const FolderManagement = ({
           />
         )}
 
-        {currentView === "apis" && (
+        {/* {currentView === "apis" && (
           <ApiView
             folder={selectedFolder}
             apis={filteredApis}
@@ -500,7 +500,7 @@ const FolderManagement = ({
             loading={loading}
             onAIUpdate={() => setShowAIUpdateGenerator(true)}
           />
-        )}
+        )} */}
       </div>
 
       {/* Modals */}

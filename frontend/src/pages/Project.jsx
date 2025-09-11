@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react"
-import DiagramViewer from "../components/Table"
+import DiagramViewer from "../components/schemaViewer"
 import axios from "axios"
 import { BACKEND_URL } from "../config"
 import { useNavigate, useParams } from "react-router-dom"
@@ -222,7 +222,7 @@ export const Project = () => {
                   <div className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin"></div>
                 )}
               </button>
-              {/* <button
+              <button
                 onClick={() => setActiveTab("apis")}
                 className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center gap-2 ${
                   activeTab === "apis"
@@ -246,7 +246,7 @@ export const Project = () => {
               >
                 <Code className="w-4 h-4" />
                 Editor
-              </button> */}
+              </button>
             </nav>
           </div>
         </div>
@@ -287,11 +287,11 @@ export const Project = () => {
                 <FolderManagement projectId={projectId} folders={folders} setFolders={setFolders} />
               )}
             </div>
-          )}
+          )} 
 
-          {activeTab === "editor" && (
+           {activeTab === "editor" && (
             <div className="flex justify-center">
-              <CodeEditorPreview />
+              <CodeEditorPreview projectId={projectId} />
             </div>
           )}
         </div>
