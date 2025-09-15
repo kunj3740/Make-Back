@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Edit2, Save, X, Terminal, Zap, Eye, Code, BookOpen, FileCode, Copy, AlertCircle } from "lucide-react"
+import { Edit2, Save, X, Terminal, Zap, Eye, Code, BookOpen, FileCode, Copy, AlertCircle, TestTube } from "lucide-react"
 import TestCaseView from "./test-case-view"
+import ApiTestSection from "./testing/api-test-section"
 
 const ApiDetailView = ({ api, onUpdate, getMethodColor, loading, onAIUpdate }) => {
   const [activeTab, setActiveTab] = useState("overview")
@@ -83,17 +84,17 @@ const ApiDetailView = ({ api, onUpdate, getMethodColor, loading, onAIUpdate }) =
     <div className="space-y-6">
       {/* API Header */}
       <div className="relative">
-        <div className="absolute inset-0 bg-gradient-to-r from-emerald-900/20 via-blue-700/20 to-purple-800/20 rounded-2xl blur"></div>
-        <div className="relative bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6 shadow-2xl">
-          <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 via-transparent to-purple-500/5 rounded-2xl"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-emerald-900/20 via-blue-700/20 to-slate-800/20 rounded-2xl blur"></div>
+        <div className="relative bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6 ">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-transparent to-slate-500/5 rounded-2xl"></div>
           <div className="relative flex items-start justify-between">
             <div className="flex items-center space-x-6 flex-1">
-              <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-emerald-900 to-blue-900 rounded-xl blur opacity-40"></div>
-                <div className="relative bg-gradient-to-br from-emerald-500/30 to-blue-500/30 p-4 rounded-xl border border-slate-700/50">
-                  <Terminal className="h-10 w-10 text-emerald-400" />
+                <div className="relative">
+                  <div className="absolute inset-0 bg-gradient-to-r  rounded-xl blur opacity-40"></div>
+                  <div className="relative bg-gradient-to-br from-emerald-500/30 to-blue-500/30 p-4 rounded-xl border border-slate-700/50">
+                    <Terminal className="h-10 w-10 text-emerald-400" />
+                  </div>
                 </div>
-              </div>
               <div className="flex-1">
                 {isEditing ? (
                   <div className="space-y-4">
@@ -139,7 +140,7 @@ const ApiDetailView = ({ api, onUpdate, getMethodColor, loading, onAIUpdate }) =
                     </h1>
                     <div className="flex items-center space-x-4 mb-3">
                       <span
-                        className={`px-4 py-2 rounded-lg font-bold border-2 shadow-xl ${getMethodColor(api.method)}`}
+                        className={`px-4 py-2 rounded-lg font-bold border-2  ${getMethodColor(api.method)}`}
                       >
                         {api.method}
                       </span>
@@ -178,7 +179,7 @@ const ApiDetailView = ({ api, onUpdate, getMethodColor, loading, onAIUpdate }) =
                 <>
                   <button
                     onClick={onAIUpdate}
-                    className="px-5 py-3 rounded-lg bg-gradient-to-r from-orange-800 to-orange-500 hover:from-orange-700 hover:to-orange-400 text-white font-semibold transition-all duration-300 transform hover:scale-105 shadow-xl shadow-orange-500/25 text-sm"
+                    className="px-5 py-3 rounded-lg bg-gradient-to-r from-orange-800 to-orange-500 hover:from-orange-700 hover:to-orange-400 text-white font-semibold transition-all duration-300 transform hover:scale-105  text-sm"
                   >
                     <div className="flex items-center space-x-2">
                       <Zap className="h-4 w-4" />
@@ -187,7 +188,7 @@ const ApiDetailView = ({ api, onUpdate, getMethodColor, loading, onAIUpdate }) =
                   </button>
                   <button
                     onClick={() => setIsEditing(true)}
-                    className="px-5 py-3 rounded-lg bg-gradient-to-r from-blue-800 to-blue-800 hover:from-blue-500 hover:to-blue-600 text-white font-semibold transition-all duration-300 transform hover:scale-105 shadow-xl shadow-blue-500/25 text-sm"
+                    className="px-5 py-3 rounded-lg bg-gradient-to-r from-blue-800 to-blue-800 hover:from-blue-500 hover:to-blue-600 text-white font-semibold transition-all duration-300 transform hover:scale-105  text-sm"
                   >
                     <div className="flex items-center space-x-2">
                       <Edit2 className="h-4 w-4" />
@@ -211,6 +212,7 @@ const ApiDetailView = ({ api, onUpdate, getMethodColor, loading, onAIUpdate }) =
                 { id: "overview", label: "Overview", icon: Eye },
                 { id: "code", label: "Controller Code", icon: Code },
                 { id: "documentation", label: "Documentation", icon: BookOpen },
+                { id: "test", label: "Test", icon: TestTube },
                 { id: "test-input", label: "Test Case", icon: FileCode },
               ].map((tab) => (
                 <button
@@ -247,10 +249,10 @@ const ApiDetailView = ({ api, onUpdate, getMethodColor, loading, onAIUpdate }) =
                       </div>
                     </div>
                     <div className="relative">
-                      <div className="absolute inset-0 bg-gradient-to-r from-purple-900/20 to-pink-900/20 rounded-xl blur "></div>
-                      <div className="relative bg-gradient-to-br from-slate-900/30 to-slate-800/30 p-4 rounded-xl border border-slate-700/50">
+                      <div className="absolute inset-0 bg-gradient-to-r  rounded-xl blur "></div>
+                      <div className="relative bg-gradient-to-br from-slate-700/30 to-slate-800/30 p-4 rounded-xl border border-slate-700/50">
                         <label className="block text-sm font-medium text-slate-300 mb-2">Endpoint</label>
-                        <code className="text-slate-300 font-mono bg-slate-900/50 px-3 py-2 rounded-lg border border-slate-600/50 shadow-lg">
+                        <code className="text-slate-300 font-mono bg-slate-900/50 px-3 py-2 rounded-lg border border-slate-600/50 ">
                           {api.endpoint}
                         </code>
                       </div>
@@ -258,7 +260,7 @@ const ApiDetailView = ({ api, onUpdate, getMethodColor, loading, onAIUpdate }) =
                   </div>
                   {api.description && (
                     <div className="relative mt-4">
-                      <div className="absolute inset-0 bg-gradient-to-r from-cyan-900/20 to-purple-900/20 rounded-xl blur"></div>
+                      <div className="absolute inset-0 bg-gradient-to-r from-cyan-900/20 to-slate-900/20 rounded-xl blur"></div>
                       <div className="relative bg-gradient-to-br from-slate-700/30 to-slate-800/30 p-4 rounded-xl border border-slate-700/50">
                         <label className="block text-sm font-medium text-slate-300 mb-2">Description</label>
                         <p className="text-slate-300 leading-relaxed">{api.description}</p>
@@ -412,6 +414,9 @@ const ApiDetailView = ({ api, onUpdate, getMethodColor, loading, onAIUpdate }) =
                 </div>
               </div>
             )}
+
+            {/* Test Tab */}
+            {activeTab === "test" && <ApiTestSection api={api} />}
 
             {/* Test Case Tab */}
             {activeTab === "test-input" && <TestCaseView api={api} />}

@@ -8,7 +8,11 @@ const TestCaseView = ({ api }) => {
   const formatJson = (obj) => {
     if (!obj) return "{}"
     try {
-      return JSON.stringify(obj, null, 2)
+      const cleanObj = { ...obj }
+      if (cleanObj._id) {
+        delete cleanObj._id
+      }
+      return JSON.stringify(cleanObj, null, 2)
     } catch (e) {
       return "{}"
     }

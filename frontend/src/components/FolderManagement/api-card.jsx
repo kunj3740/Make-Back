@@ -5,12 +5,24 @@ import { Edit2, Trash2, Save, X, Globe, Eye, ChevronRight } from "lucide-react"
 
 const ApiCard = ({ api, onEdit, onDelete, onUpdate, onClick, isEditing, getMethodColor }) => {
   const [editData, setEditData] = useState({
-    name: api.name,
-    description: api.description || "",
-    method: api.method,
-    endpoint: api.endpoint,
-    controllerCode: api.controllerCode || "",
+    name: api?.name || "",
+    description: api?.description || "",
+    method: api?.method || "GET",
+    endpoint: api?.endpoint || "",
+    controllerCode: api?.controllerCode || "",
   })
+
+  if (!api) {
+    return (
+      <div className="group relative">
+        <div className="relative bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-xl p-4">
+          <div className="flex items-center justify-center py-8">
+            <p className="text-slate-400">API data not available</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="group relative">
@@ -61,16 +73,16 @@ const ApiCard = ({ api, onEdit, onDelete, onUpdate, onClick, isEditing, getMetho
               ) : (
                 <div>
                   <h3 className="text-lg font-bold text-white group-hover:text-emerald-400 transition-colors mb-2">
-                    {api.name}
+                    {api.name || "Unnamed API"}
                   </h3>
                   <div className="flex items-center space-x-2">
                     <span
-                      className={`px-3 py-1 rounded-lg text-sm font-semibold border shadow-lg ${getMethodColor(api.method)}`}
+                      className={`px-3 py-1 rounded-lg text-sm font-semibold border shadow-lg ${getMethodColor ? getMethodColor(api.method || "GET") : "text-slate-400 bg-slate-500/10 border-slate-500/20"}`}
                     >
-                      {api.method}
+                      {api.method || "GET"}
                     </span>
                     <code className="text-slate-300 text-sm bg-slate-800/50 px-2 py-1 rounded font-mono border border-slate-700/50">
-                      {api.endpoint}
+                      {api.endpoint || "/api/endpoint"}
                     </code>
                   </div>
                 </div>
@@ -83,7 +95,7 @@ const ApiCard = ({ api, onEdit, onDelete, onUpdate, onClick, isEditing, getMetho
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    onUpdate(api._id, editData)
+                    onUpdate && onUpdate(api._id || api.id, editData)
                   }}
                   className="p-2 hover:bg-emerald-500/20 rounded-lg transition-colors"
                 >
@@ -93,13 +105,13 @@ const ApiCard = ({ api, onEdit, onDelete, onUpdate, onClick, isEditing, getMetho
                   onClick={(e) => {
                     e.stopPropagation()
                     setEditData({
-                      name: api.name,
-                      description: api.description || "",
-                      method: api.method,
-                      endpoint: api.endpoint,
-                      controllerCode: api.controllerCode || "",
+                      name: api?.name || "",
+                      description: api?.description || "",
+                      method: api?.method || "GET",
+                      endpoint: api?.endpoint || "",
+                      controllerCode: api?.controllerCode || "",
                     })
-                    onEdit(null)
+                    onEdit && onEdit(null)
                   }}
                   className="p-2 hover:bg-slate-500/20 rounded-lg transition-colors"
                 >
@@ -111,7 +123,7 @@ const ApiCard = ({ api, onEdit, onDelete, onUpdate, onClick, isEditing, getMetho
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    onEdit(api._id)
+                    onEdit && onEdit(api._id || api.id)
                   }}
                   className="p-2 hover:bg-blue-500/20 rounded-lg transition-colors"
                 >
@@ -120,7 +132,7 @@ const ApiCard = ({ api, onEdit, onDelete, onUpdate, onClick, isEditing, getMetho
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    onDelete(api._id)
+                    onDelete && onDelete(api._id || api.id)
                   }}
                   className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
                 >
@@ -151,7 +163,7 @@ const ApiCard = ({ api, onEdit, onDelete, onUpdate, onClick, isEditing, getMetho
           </div>
         )}
         {!isEditing && (
-          <div onClick={() => onClick(api)} className="flex items-center justify-end mt-3">
+          <div onClick={() => onClick && onClick(api)} className="flex items-center justify-end mt-3">
             <div className="flex items-center space-x-1 text-slate-400 group-hover:text-emerald-400 transition-colors">
               <Eye className="h-4 w-4" />
               <ChevronRight className="h-4 w-4" />

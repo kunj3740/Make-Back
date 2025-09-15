@@ -133,52 +133,6 @@ const SchemaViewer = ({ entities = [], projectId, onEditSchema, diagramUrl, diag
     return colors[type?.toLowerCase()] || "from-gray-500 to-gray-600"
   }
 
-  const autoArrange = () => {
-    const baseX = 100
-    const baseY = 100
-    const colSpacing = 400
-    const rowSpacing = 100
-    const maxCols = Math.ceil(Math.sqrt(diagramEntities.length))
-
-    const arranged = []
-    let col = 0
-    let row = 0
-    let currentRowHeight = 0
-    const rowHeights = []
-
-    diagramEntities.forEach((entity, index) => {
-      const tableWidth = 280
-      const headerHeight = 56
-      const attrHeight = 40
-      const entityHeight = headerHeight + (entity.attributes?.length || 0) * attrHeight
-
-      const x = baseX + col * colSpacing
-      const y = baseY + rowHeights.reduce((a, b) => a + b, 0)
-
-      arranged.push({
-        ...entity,
-        x,
-        y,
-      })
-
-      currentRowHeight = Math.max(currentRowHeight, entityHeight + rowSpacing)
-
-      col++
-      if (col >= maxCols) {
-        rowHeights.push(currentRowHeight)
-        currentRowHeight = 0
-        col = 0
-        row++
-      }
-    })
-
-    if (currentRowHeight > 0) {
-      rowHeights.push(currentRowHeight)
-    }
-
-    setDiagramEntities(arranged)
-  }
-
   const handleMouseDown = (e, entity) => {
     if (!editMode) return
     e.preventDefault()
@@ -519,7 +473,7 @@ const SchemaViewer = ({ entities = [], projectId, onEditSchema, diagramUrl, diag
 
   return (
     <div
-      className={`bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 rounded-2xl border border-slate-800/50 overflow-hidden shadow-2xl ${
+      className={`bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-slate-800/50 overflow-hidden shadow-2xl ${
         isFullscreen ? "fixed inset-4 z-50" : ""
       }`}
     >
@@ -553,50 +507,41 @@ const SchemaViewer = ({ entities = [], projectId, onEditSchema, diagramUrl, diag
             <button
               onClick={handleDiagramButtonClick}
               disabled={isGeneratingDiagram}
-              className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white rounded-lg font-medium transition-all duration-200 shadow-lg shadow-cyan-500/25 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 via-green-700 to-teal-800 hover:from-emerald-700 hover:via-emerald-800 hover:to-teal-900 text-white rounded-xl font-semibold transition-all duration-300  flex items-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 transform"
             >
               <Eye className="w-4 h-4" />
-              {getDiagramButtonText()}
+              <span className="text-md">
+                {isGeneratingDiagram ? "Generating..." : currentDiagramUrl ? "View Diagram" : "Generate Diagram"}
+              </span>
             </button>
 
             {/* View Controls */}
             <div className="flex items-center gap-2 bg-slate-800/50 rounded-lg p-1 border border-slate-700/50">
-              <button
-                onClick={() => handleZoom("out")}
-                disabled={zoom <= 0.5}
-                className="p-2 text-slate-400 hover:text-white disabled:opacity-50 transition-colors rounded"
-                title="Zoom Out"
-              >
-                <ZoomOut className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setZoom(1)}
-                className="px-3 py-1 text-xs text-slate-400 hover:text-white transition-colors"
-              >
-                {Math.round(zoom * 100)}%
-              </button>
-              <button
-                onClick={() => handleZoom("in")}
-                disabled={zoom >= 2}
-                className="p-2 text-slate-400 hover:text-white disabled:opacity-50 transition-colors rounded"
-                title="Zoom In"
-              >
-                <ZoomIn className="w-4 h-4" />
-              </button>
+              <div className="flex items-center bg-slate-800/60 rounded-lg border border-slate-700/50">
+                <button
+                  onClick={() => handleZoom("out")}
+                  disabled={zoom <= 0.5}
+                  className="p-2 text-slate-400 hover:text-white disabled:opacity-50 transition-colors"
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+                <span className="px-2 py-1 text-xs text-slate-400 min-w-[45px] text-center border-x border-slate-700/50">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <button
+                  onClick={() => handleZoom("in")}
+                  disabled={zoom >= 2}
+                  className="p-2 text-slate-400 hover:text-white disabled:opacity-50 transition-colors"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
             {/* Layout Controls */}
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowGrid(!showGrid)}
-                className={`p-2 rounded-lg transition-colors ${
-                  showGrid ? "bg-emerald-600/20 text-emerald-400" : "text-slate-400 hover:text-white"
-                }`}
-                title="Toggle Grid"
-              >
-                <Grid3X3 className="w-4 h-4" />
-              </button>
-
               <button
                 onClick={() => setEditMode(!editMode)}
                 className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 ${
@@ -607,15 +552,6 @@ const SchemaViewer = ({ entities = [], projectId, onEditSchema, diagramUrl, diag
               >
                 <Move className="w-4 h-4" />
                 {editMode ? "Done" : "Edit"}
-              </button>
-
-              <button
-                onClick={autoArrange}
-                className="px-4 py-2 bg-slate-800/50 hover:bg-slate-700/50 text-slate-300 rounded-lg font-medium transition-colors flex items-center gap-2 border border-slate-700/50"
-                title="Auto-arrange tables"
-              >
-                <RotateCcw className="w-4 h-4" />
-                Arrange
               </button>
             </div>
 

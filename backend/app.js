@@ -23,7 +23,11 @@ app.use('/api/v1/diagrams' , diagramRoutes)
 app.use('/api/v1/folders' , folderRoutes)
 app.use('/api/ai', AIRoutes);
 app.use('/api/v1/components' , CompoGenRoutes)
-
+app.get("/api/v1/temp" , async (req , res ) => {
+  res.json({
+    name : " sai"
+  })
+})
 // MongoDB connection
 mongoose.connect(process.env.DATABASE_URL, {
   useNewUrlParser: true,
