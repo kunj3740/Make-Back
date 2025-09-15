@@ -4,6 +4,10 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const { v2: cloudinary } = require('cloudinary');
 const { v4: uuidv4 } = require('uuid');
+const dotenv = require("dotenv");
+const Diagram = require('../models/Diagram');
+dotenv.config();
+
 
 const execAsync = promisify(exec);
 
@@ -35,16 +39,7 @@ class MermaidController {
    */
   async generateAndUploadDiagram(req, res) {
     console.log('📥 Request received');
-
-    // 🔹 Hardcoded values for now (no req.body usage)
-    const mermaidCode = `flowchart TD
-        A["Limited Interactivity and Accessibility"] --> B["Current Challenges"]
-        B --> C["Delayed Reporting"] & D["Lack of Visibility"] & E["Delayed Response"] & F["Limited Engagement"]
-        C --> G["Reduced Response Times"]
-        D --> H["Citizens Unaware of Crime Activities"]
-        E --> I["Delayed Law Enforcement Response"]
-        F --> J["Communication Gap"]
-    `;
+    const mermaidCode = req.body.mermaidCode;
     const format = 'png';
     const theme = 'default';
 
@@ -69,14 +64,20 @@ class MermaidController {
         await this.cleanup([inputFile, outputFile]);
         console.log(`🧹 Temporary files cleaned up`);
 
-        // Step 5: Return success response
+        const updatedDiagram = await Diagram.findByIdAndUpdate(
+            req.body.diagramId,
+            {
+              diagramUrl: cloudinaryUrl,
+            },
+            { new: true, runValidators: true }
+          );
+
+        req.body.diagramUrl = cloudinaryUrl
+        // // Step 5: Return success response
         return res.status(200).json({
         success: true,
         data: {
-            url: cloudinaryUrl,
-            format: format,
-            theme: theme,
-            sessionId: sessionId
+            diagramUrl: cloudinaryUrl,
         }
         });
 
@@ -112,7 +113,8 @@ class MermaidController {
   async generateImage(inputFile, outputFile, format, theme) {
     try {
       // Construct Mermaid CLI command
-      const command = `npx @mermaid-js/mermaid-cli -i "${inputFile}" -o "${outputFile}" -t "${theme}" -f ${format} --quiet`;
+      // const command = `npx @mermaid-js/mermaid-cli -i "${inputFile}" -o "${outputFile}" -t "${theme}" -f ${format} --quiet`;
+      const command = `npx @mermaid-js/mermaid-cli -i "${inputFile}" -o "${outputFile}" -t "${theme}" --quiet`;
       
       console.log(`🔄 Executing: ${command}`);
       

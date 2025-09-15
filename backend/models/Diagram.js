@@ -65,6 +65,11 @@ const diagramSchema = new mongoose.Schema({
     required: true
   },
   entities: [entitySchema],
+  diagramUrl: {
+    type: String,
+    default: '',
+    trim: true
+  },
   metadata: {
     version: {
       type: String,

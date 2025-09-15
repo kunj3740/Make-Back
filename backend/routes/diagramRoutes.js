@@ -31,9 +31,8 @@ router.post('/:id/duplicate', auth, diagramController.duplicateDiagram);
 // Export diagram as JSON
 router.get('/:id/export', auth, diagramController.exportDiagram);
 
-
 // POST /api/mermaid/generate
-router.post('/generate', generateAndUploadDiagram);
+router.post('/generate', auth, diagramController.generateMermaidCode);
 
 // GET /api/mermaid/health
 router.get('/health', healthCheck);
