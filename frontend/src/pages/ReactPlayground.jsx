@@ -8,6 +8,7 @@ import {
 } from "@codesandbox/sandpack-react"
 import { nightOwl } from "@codesandbox/sandpack-themes"
 import { BACKEND_URL } from "../config"
+import axios from "axios"
 
 function CodeSync({ onCodeChange }) {
   const { sandpack } = useSandpack()
