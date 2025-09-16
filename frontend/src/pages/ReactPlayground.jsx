@@ -73,37 +73,37 @@ export default function CodeEditorPreview({ projectId }) {
     }
   }, [projectId, authToken])
 
-  const fetchComponentsByProject = async () => {
-    try {
-      setLoading(true)
-      const response = await fetch(`${BACKEND_URL}/api/v1/components/project/${projectId}`, {
+  
+const fetchComponentsByProject = async () => {
+  try {
+    setLoading(true)
+    const response = await axios.get(
+      `${BACKEND_URL}/api/v1/components/project/${projectId}`,
+      {
         headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch components')
+          Authorization: `Bearer ${authToken}`,
+          "Content-Type": "application/json",
+        },
       }
+    )
 
-      const data = await response.json()
-      console.log("[v0] Fetched components:", data)
-      
-      if (data && data.length > 0) {
-        setPages(data)
-        setActivePageId(data[0]._id)
-      } else {
-        
-      }
-    } catch (err) {
-      console.error("[v0] API fetch error:", err)
-      setError(err.message)
-    
-    } finally {
-      setLoading(false)
+    const data = response.data
+    console.log("[v0] Fetched components:", data)
+
+    if (data && data.length > 0) {
+      setPages(data)
+      setActivePageId(data[0]._id)
+    } else {
+      // handle empty case
     }
+  } catch (err) {
+    console.error("[v0] API fetch error:", err)
+    setError(err.message)
+  } finally {
+    setLoading(false)
   }
+}
+
 
   
 
