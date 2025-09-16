@@ -40,7 +40,9 @@ export default function CodeEditorPreview({ projectId }) {
   // Get auth token from localStorage
   useEffect(() => {
     const token = localStorage.getItem("token")
-    setAuthToken(token)
+    if( token ){
+      setAuthToken(token)
+    }
   }, [])
 
   // Close dropdown when clicking outside
