@@ -46,3 +46,46 @@ export const getStatusColor = (status) => {
   if (status >= 500) return "text-red-400 bg-red-500/10 border-red-500/30 shadow-red-500/10";
   return "text-slate-400 bg-slate-500/10 border-slate-500/30 shadow-slate-500/10";
 };
+
+export function buildUrlWithPathParams(baseUrl, endpoint, pathParams, queryParams) {
+  let processedEndpoint = endpoint
+
+  // Replace path parameters in the endpoint
+  pathParams.forEach((param) => {
+    if (param.enabled && param.key && param.value) {
+      const placeholder = `{${param.key}}`
+      processedEndpoint = processedEndpoint.replace(placeholder, param.value)
+    }
+  })
+
+  // Build the full URL
+  const fullUrl = baseUrl.endsWith("/")
+    ? baseUrl + processedEndpoint.replace(/^\//, "")
+    : baseUrl + (processedEndpoint.startsWith("/") ? processedEndpoint : "/" + processedEndpoint)
+
+  const url = new URL(fullUrl)
+
+  // Add query parameters
+  queryParams.forEach((param) => {
+    if (param.enabled && param.key && param.value) {
+      url.searchParams.append(param.key, param.value)
+    }
+  })
+
+  return url
+}
+
+export function extractPathParams(endpoint) {
+  const matches = endpoint.match(/\{([^}]+)\}/g)
+  if (!matches) return []
+
+  return matches.map((match) => {
+    const paramName = match.slice(1, -1) // Remove { and }
+    return {
+      key: paramName,
+      value: "",
+      enabled: true,
+      description: `Path parameter: ${paramName}`,
+    }
+  })
+}

@@ -60,6 +60,11 @@ const apiSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  controllerName: {
+    type: String,
+    required: true,
+    trim: true
+  },
   testCases: [testCaseSchema],
   documentation: {
     summary: {
@@ -88,10 +93,9 @@ const apiSchema = new mongoose.Schema({
         enum: ['query', 'body', 'params', 'headers'],
         default: 'body'
       },
-      _id: false // This prevents Mongoose from adding _id to each parameter
+      _id: false
     }]
   }
-  
 });
 
 const folderSchema = new mongoose.Schema({
@@ -104,7 +108,7 @@ const folderSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
-  commonPrompt:{
+  commonPrompt: {
     type: String,
     default: ''
   },
@@ -118,8 +122,114 @@ const folderSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  
+  // APIs inside this folder
+  apis: [apiSchema],
 
-  apis: [apiSchema]
+  // Import tracking - only required imports needed for the folder
+  // imports: [{
+  //   module: {
+  //     type: String,
+  //     required: true
+  //   },
+  //   type: {
+  //     type: String,
+  //     enum: ['npm', 'local', 'core'],
+  //     default: 'npm'
+  //   },
+  //   version: {
+  //     type: String,
+  //     default: 'latest'
+  //   }
+  // }],
+  imports: [{
+    module: {
+      type: String,
+      required: true
+    },
+    type: {
+      type: String,
+      enum: ['npm', 'local', 'core'],
+      default: 'npm'
+    },
+    version: {
+      type: String,
+      default: 'latest'
+    },
+    importStatement: {
+      type: String,
+      default: ''
+    }
+  }],
+  // Generated file information
+  // generatedFiles: {
+  //   controllerFile: {
+  //     path: {
+  //       type: String,
+  //       default: ''
+  //     },
+  //     lastGenerated: {
+  //       type: Date,
+  //       default: null
+  //     },
+  //     hash: {
+  //       type: String,
+  //       default: ''
+  //     }
+  //   },
+  //   routeFile: {
+  //     path: {
+  //       type: String,
+  //       default: ''
+  //     },
+  //     lastGenerated: {
+  //       type: Date,
+  //       default: null
+  //     },
+  //     hash: {
+  //       type: String,
+  //       default: ''
+  //     }
+  //   }
+  // }
+  generatedFiles: {
+    controllerFile: {
+      path: {
+        type: String,
+        default: ''
+      },
+      code: {
+        type: String,
+        default: ''
+      },
+      lastGenerated: {
+        type: Date,
+        default: null
+      },
+      hash: {
+        type: String,
+        default: ''
+      }
+    },
+    routeFile: {
+      path: {
+        type: String,
+        default: ''
+      },
+      code: {
+        type: String,
+        default: ''
+      },
+      lastGenerated: {
+        type: Date,
+        default: null
+      },
+      hash: {
+        type: String,
+        default: ''
+      }
+    }
+  }
 }, {
   timestamps: true
 });

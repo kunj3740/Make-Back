@@ -5,9 +5,10 @@ const cors = require('cors')
 const authRoutes = require('./routes/authRoutes')
 const projectRoutes = require("./routes/projectRoutes");
 const diagramRoutes = require("./routes/diagramRoutes");
-const AIRoutes = require("./routes/AIroutes");
+const AIRoutes = require("./routes/AiRoutes");
 const folderRoutes = require("./routes/folderRoutes");
 const CompoGenRoutes = require("./routes/CompoGenRoutes");
+const CodeRoutes = require("./routes/CodeRoutes")
 
 dotenv.config()
 
@@ -23,9 +24,11 @@ app.use('/api/v1/diagrams' , diagramRoutes)
 app.use('/api/v1/folders' , folderRoutes)
 app.use('/api/ai', AIRoutes);
 app.use('/api/v1/components' , CompoGenRoutes)
+app.use('/api/v1/code' , CodeRoutes)
+
 app.get("/api/v1/temp" , async (req , res ) => {
-  res.json({
-    name : " sai"
+  return res.json({
+    message : "hello from testing api"  
   })
 })
 // MongoDB connection

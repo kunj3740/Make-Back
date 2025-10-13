@@ -1,3 +1,4 @@
+
 // "use client"
 
 // import { useState } from "react"
@@ -9,6 +10,11 @@
 //   const [apiStates, setApiStates] = useState({})
 //   const [generatingApis, setGeneratingApis] = useState(new Set())
 
+//   const checkDuplicateApiName = (name) => {
+//     if (!folder.apis) return false
+//     return folder.apis.some((api) => api.name.toLowerCase().trim() === name.toLowerCase().trim())
+//   }
+
 //   const generateAndCreateApi = async (suggestion) => {
 //     const suggestionId = suggestion.id
 
@@ -17,6 +23,15 @@
 //     setApiStates((prev) => ({ ...prev, [suggestionId]: "generating" }))
 
 //     try {
+//       if (checkDuplicateApiName(suggestion.name)) {
+//         setApiStates((prev) => ({
+//           ...prev,
+//           [suggestionId]: "error",
+//           [`${suggestionId}_error`]: `An API named "${suggestion.name}" already exists in this folder. Please choose a different name.`,
+//         }))
+//         return
+//       }
+
 //       // Step 1: Generate API using AI
 //       const generateResponse = await axios.post(
 //         `${BACKEND_URL}/api/ai/generate-api`,
@@ -36,6 +51,15 @@
 
 //       const generatedAPI = generateResponse.data.api
 
+//       if (checkDuplicateApiName(generatedAPI.name)) {
+//         setApiStates((prev) => ({
+//           ...prev,
+//           [suggestionId]: "error",
+//           [`${suggestionId}_error`]: `Generated API name "${generatedAPI.name}" already exists in this folder. Try regenerating or use a different suggestion.`,
+//         }))
+//         return
+//       }
+
 //       // Step 2: Create the API in the folder
 //       const createResponse = await axios.post(`${BACKEND_URL}/api/v1/folders/${folder._id}/api`, generatedAPI, {
 //         headers: { Authorization: `Bearer ${authToken}` },
@@ -54,7 +78,23 @@
 //       folder.apis = updatedFolder.apis
 //     } catch (error) {
 //       console.error(`Error generating API "${suggestion.name}":`, error)
-//       setApiStates((prev) => ({ ...prev, [suggestionId]: "error" }))
+
+//       let errorMessage = "Failed to generate API"
+//       if (
+//         error.response?.status === 409 ||
+//         error.response?.data?.message?.includes("duplicate") ||
+//         error.response?.data?.message?.includes("already exists")
+//       ) {
+//         errorMessage = `An API named "${suggestion.name}" already exists. Please try a different name.`
+//       } else if (error.response?.data?.error) {
+//         errorMessage = error.response.data.error
+//       }
+
+//       setApiStates((prev) => ({
+//         ...prev,
+//         [suggestionId]: "error",
+//         [`${suggestionId}_error`]: errorMessage,
+//       }))
 //     } finally {
 //       setGeneratingApis((prev) => {
 //         const newSet = new Set(prev)
@@ -109,6 +149,10 @@
 //       default:
 //         return "hover:bg-slate-700/30 cursor-pointer"
 //     }
+//   }
+
+//   const getApiErrorMessage = (suggestionId) => {
+//     return apiStates[`${suggestionId}_error`] || "Failed to create. Click to retry"
 //   }
 
 //   const completedCount = Object.values(apiStates).filter((state) => state === "completed").length
@@ -220,7 +264,7 @@
 //                           <p className="text-emerald-400 text-xs mt-1">API created successfully</p>
 //                         )}
 //                         {state === "error" && (
-//                           <p className="text-red-400 text-xs mt-1">Failed to create. Click to retry</p>
+//                           <p className="text-red-400 text-xs mt-1">{getApiErrorMessage(suggestionId)}</p>
 //                         )}
 //                       </div>
 //                       {state !== "generating" && state !== "completed" && (
@@ -239,6 +283,8 @@
 //             <p className="text-slate-300 text-sm">
 //               <strong>Instructions:</strong> Click on any API suggestion to generate and create it automatically. The AI
 //               will create the complete API with endpoints, documentation, and test cases based on your folder's context.
+//               <br />
+//               <strong>Note:</strong> Duplicate API names within the same folder are automatically prevented.
 //             </p>
 //           </div>
 //         </div>
@@ -404,6 +450,10 @@ const ApiSuggestions = ({ folder, suggestions, onComplete, onSkip, authToken, pr
     return apiStates[`${suggestionId}_error`] || "Failed to create. Click to retry"
   }
 
+  const hasInProgressApis = () => {
+    return Object.values(apiStates).some((state) => state === "generating")
+  }
+
   const completedCount = Object.values(apiStates).filter((state) => state === "completed").length
   const totalSuggestions = suggestions.length
 
@@ -456,13 +506,23 @@ const ApiSuggestions = ({ folder, suggestions, onComplete, onSkip, authToken, pr
             <div className="flex space-x-2">
               <button
                 onClick={onSkip}
-                className="px-4 py-2 rounded-lg bg-slate-700/50 hover:bg-slate-600/50 text-white font-medium transition-all duration-300 border border-slate-600/50 text-sm"
+                disabled={hasInProgressApis()}
+                className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 border text-sm ${
+                  hasInProgressApis()
+                    ? "bg-slate-700/30 text-slate-500 border-slate-700/30 cursor-not-allowed opacity-50"
+                    : "bg-slate-700/50 hover:bg-slate-600/50 text-white border-slate-600/50"
+                }`}
               >
                 Skip
               </button>
               <button
                 onClick={handleComplete}
-                className="px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-medium transition-all duration-300 transform hover:scale-105 shadow-lg shadow-emerald-500/25 text-sm"
+                disabled={hasInProgressApis()}
+                className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 text-sm ${
+                  hasInProgressApis()
+                    ? "bg-slate-700/30 text-slate-500 border border-slate-700/30 cursor-not-allowed opacity-50"
+                    : "bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white transform hover:scale-105 shadow-lg shadow-emerald-500/25"
+                }`}
               >
                 <div className="flex items-center space-x-2">
                   <Check className="h-4 w-4" />

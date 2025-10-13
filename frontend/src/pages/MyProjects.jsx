@@ -72,6 +72,9 @@ export default function ProjectManager() {
   }
 
   useEffect(() => {
+    if ( !token ){
+      navigate("/signin")
+    }
     fetchProjects()
   }, [])
 
@@ -327,7 +330,7 @@ export default function ProjectManager() {
               </button>
               <button
                 onClick={handleCreate}
-                disabled={isLoading || !newProject.name.trim()}
+                disabled={isLoading || !newProject.name.trim() || !newProject.description.trim()}
                 className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-slate-600 disabled:to-slate-700 text-white rounded-xl font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-blue-500/25"
               >
                 <Save className="w-4 h-4" />

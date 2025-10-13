@@ -3,9 +3,38 @@ import { Code, AlertCircle } from 'lucide-react';
 
 const BodyTab = ({ body, method, onBodyChange }) => {
   const isGetMethod = method === "GET";
+        
+  // Extract body content from nested format if it exists
+  const getBodyContent = () => {
+    if (!body) return '';
+         
+    try {
+      const parsed = JSON.parse(body);
+      if (parsed.body) {
+        return JSON.stringify(parsed.body, null, 2);
+      }
+      return body;
+    } catch (error) {
+      return body;
+    }
+  };
+
+  const handleBodyChange = (value) => {
+    // When updating, wrap the content back in the body format
+    try {
+      const parsed = JSON.parse(value);
+      const wrappedBody = {
+        body: parsed
+      };
+      onBodyChange(JSON.stringify(wrappedBody, null, 2));
+    } catch (error) {
+      // If it's not valid JSON, pass as is
+      onBodyChange(value);
+    }
+  };
 
   return (
-    <div className="space-y-6 ">
+    <div className="space-y-6">
       <div className="flex items-center space-x-3">
         <div className="p-2 bg-orange-500/10 rounded-lg">
           <Code className="h-5 w-5 text-orange-400" />
@@ -13,8 +42,8 @@ const BodyTab = ({ body, method, onBodyChange }) => {
         <div>
           <h3 className="text-xl font-bold text-white">Request Body</h3>
           <p className="text-slate-400 text-sm">
-            {isGetMethod 
-              ? "Request body is not applicable for GET requests" 
+            {isGetMethod
+              ? "Request body is not applicable for GET requests"
               : "Add JSON, XML, or other data to send with your request"
             }
           </p>
@@ -33,20 +62,15 @@ const BodyTab = ({ body, method, onBodyChange }) => {
 
       <div className="relative">
         <textarea
-          value={body}
-          onChange={(e) => onBodyChange(e.target.value)}
+          value={getBodyContent()}
+          onChange={(e) => handleBodyChange(e.target.value)}
           className={`w-full h-50 px-6 py-4 bg-slate-800/80 border border-slate-600/50 rounded-xl font-mono text-sm text-slate-100 resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all duration-200 placeholder-slate-500 backdrop-blur-sm ${
             isGetMethod ? 'opacity-50 cursor-not-allowed' : ''
           }`}
           placeholder={
             isGetMethod
               ? "Request body is not applicable for GET requests"
-              : `{
-  "key": "value",
-  "data": {
-    "nested": "object"
-  }
-}`
+              : 'Enter JSON data for the request body'
           }
           disabled={isGetMethod}
         />
@@ -56,7 +80,6 @@ const BodyTab = ({ body, method, onBodyChange }) => {
           </div>
         )}
       </div>
-
     </div>
   );
 };

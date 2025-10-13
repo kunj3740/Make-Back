@@ -1,5 +1,8 @@
 {
   "dependencies": {
-    "openai": "^5.15.0"
+    "crypto": "^1.0.1",
+    "fs": "^0.0.1-security",
+    "openai": "^5.15.0",
+    "path": "^0.12.7"
   }
 }

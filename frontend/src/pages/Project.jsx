@@ -237,18 +237,157 @@ import { useState, useEffect } from "react"
 import axios from "axios"
 import { BACKEND_URL } from "../config"
 import { useNavigate, useParams } from "react-router-dom"
-import { Code, Database, FileText } from "lucide-react"
+import { Code, Database, Download, FileText } from "lucide-react"
 import FolderManagement from "../components/FolderManagement"
 import CodeEditorPreview from "./ReactPlayground"
 import SchemaViewer from "../components/schemaViewer"
 
 export const Project = () => {
-  const [entities, setEntities] = useState([])
+  // const [entities, setEntities] = useState([])
+  // const [diagramUrl, setDiagramUrl] = useState("") // Added state for diagramUrl
+  // const [folders, setFolders] = useState([])
+  // const [loading, setLoading] = useState(true)
+  // const [loadingSchemas, setLoadingSchemas] = useState(true)
+  // const [loadingApis, setLoadingApis] = useState(true)
+  // const [error, setError] = useState(null)
+  // const [diagramId, setDiagramId] = useState("")
+  // const [activeTab, setActiveTab] = useState("schema")
+  // const { projectId } = useParams()
+  // const Navigate = useNavigate()
+
+  // const handleDiagramUrlUpdate = (newDiagramUrl) => {
+  //   setDiagramUrl(newDiagramUrl)
+  // }
+
+  // useEffect(() => {
+  //   const fetchDiagram = async () => {
+  //     try {
+  //       const jwttoken = localStorage.getItem("token")
+  //       if (!jwttoken) {
+  //         setError("Authentication required")
+  //         setLoadingSchemas(false)
+  //         return
+  //       }
+
+  //       setLoadingSchemas(true)
+  //       const response = await axios.get(`${BACKEND_URL}/api/v1/diagrams/from/project/${projectId}`, {
+  //         headers: {
+  //           Authorization: `Bearer ${jwttoken}`,
+  //         },
+  //       })
+
+  //       let diagramData = response.data
+
+  //       if (response.data.diagram) {
+  //         diagramData = response.data.diagram
+  //       } else if (response.data.data) {
+  //         diagramData = response.data.data
+  //       }
+
+  //       if (diagramData && !diagramData.entities) {
+  //         if (Array.isArray(diagramData)) {
+  //           diagramData = { entities: diagramData }
+  //         } else {
+  //           diagramData = { entities: [] }
+  //         }
+  //       }
+  //       setDiagramId(diagramData.id || diagramData._id || null)
+  //       setEntities(diagramData.entities || [])
+  //       // Extract and set the diagramUrl
+  //       setDiagramUrl(diagramData.diagramUrl || "")
+  //     } catch (err) {
+  //       console.error("Error fetching diagram:", err)
+  //       setError(err.message || "Failed to fetch diagram")
+  //     } finally {
+  //       setLoadingSchemas(false)
+  //     }
+  //   }
+
+  //   const fetchFolders = async () => {
+  //     try {
+  //       const jwttoken = localStorage.getItem("token")
+  //       if (!jwttoken) {
+  //         setError("Authentication required")
+  //         setLoadingApis(false)
+  //         return
+  //       }
+
+  //       setLoadingApis(true)
+  //       const response = await axios.get(`${BACKEND_URL}/api/v1/folders/project/${projectId}`, {
+  //         headers: {
+  //           Authorization: `Bearer ${jwttoken}`,
+  //         },
+  //       })
+
+  //       setFolders(response.data.data || [])
+  //     } catch (err) {
+  //       console.error("Error fetching folders:", err)
+  //       setError(err.message || "Failed to fetch folders")
+  //     } finally {
+  //       setLoadingApis(false)
+  //     }
+  //   }
+
+  //   if (projectId) {
+  //     // Load schemas first (by default)
+  //     fetchDiagram()
+  //     fetchFolders()
+  //   }
+  // }, [projectId])
+
+  // // Update main loading state based on individual loading states
+  // useEffect(() => {
+  //   setLoading(loadingSchemas && loadingApis)
+  // }, [loadingSchemas, loadingApis])
+
+  // const handleEditSchema = () => {
+  //   Navigate(`/projects/${projectId}/editor`)
+  // }
+
+  //  const handleGenerateCode = async () => {
+  //   try {
+  //     setGeneratingCode(true)
+  //     const jwttoken = localStorage.getItem("token")
+      
+  //     if (!jwttoken) {
+  //       setError("Authentication required")
+  //       return
+  //     }
+
+  //     if (!diagramId || !projectId) {
+  //       setError("Diagram ID and Project ID are required")
+  //       return
+  //     }
+
+  //     const response = await axios.post(`${BACKEND_URL}/api/v1/code/generate-structure`, {
+  //       projectId: projectId,
+  //       diagramId: diagramId
+  //     }, {
+  //       headers: {
+  //         Authorization: `Bearer ${jwttoken}`,
+  //         'Content-Type': 'application/json'
+  //       },
+  //     })
+
+  //     if (response.data.success) {
+  //       // Handle success - you can add notification or further actions here
+  //       console.log('Code generated successfully:', response.data)
+  //       // You might want to show a success message or download the generated files
+  //     }
+  //   } catch (err) {
+  //     console.error("Error generating code:", err)
+  //     setError(err.response?.data?.message || "Failed to generate code")
+  //   } finally {
+  //     setGeneratingCode(false)
+  //   }
+  // }
+const [entities, setEntities] = useState([])
   const [diagramUrl, setDiagramUrl] = useState("") // Added state for diagramUrl
   const [folders, setFolders] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadingSchemas, setLoadingSchemas] = useState(true)
   const [loadingApis, setLoadingApis] = useState(true)
+  const [generatingCode, setGeneratingCode] = useState(false)
   const [error, setError] = useState(null)
   const [diagramId, setDiagramId] = useState("")
   const [activeTab, setActiveTab] = useState("schema")
@@ -257,6 +396,44 @@ export const Project = () => {
 
   const handleDiagramUrlUpdate = (newDiagramUrl) => {
     setDiagramUrl(newDiagramUrl)
+  }
+
+  const handleGenerateCode = async () => {
+    try {
+      setGeneratingCode(true)
+      const jwttoken = localStorage.getItem("token")
+      
+      if (!jwttoken) {
+        setError("Authentication required")
+        return
+      }
+
+      if (!diagramId || !projectId) {
+        setError("Diagram ID and Project ID are required")
+        return
+      }
+
+      const response = await axios.post(`${BACKEND_URL}/api/v1/code/generate-project`, {
+        projectId: projectId,
+        diagramId: diagramId
+      }, {
+        headers: {
+          Authorization: `Bearer ${jwttoken}`,
+          'Content-Type': 'application/json'
+        },
+      })
+
+      if (response.data.success) {
+        // Handle success - you can add notification or further actions here
+        console.log('Code generated successfully:', response.data)
+        // You might want to show a success message or download the generated files
+      }
+    } catch (err) {
+      console.error("Error generating code:", err)
+      setError(err.response?.data?.message || "Failed to generate code")
+    } finally {
+      setGeneratingCode(false)
+    }
   }
 
   useEffect(() => {
@@ -343,7 +520,6 @@ export const Project = () => {
   const handleEditSchema = () => {
     Navigate(`/projects/${projectId}/editor`)
   }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 pt-20 px-4">
@@ -397,7 +573,7 @@ export const Project = () => {
                   <div className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin"></div>
                 )}
               </button>
-              <button
+              {/* <button
                 onClick={() => setActiveTab("editor")}
                 className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center gap-2 ${
                   activeTab === "editor"
@@ -407,7 +583,28 @@ export const Project = () => {
               >
                 <Code className="w-4 h-4" />
                 Editor
-              </button>
+              </button> */}
+              {/* <button
+                onClick={handleGenerateCode}
+                disabled={generatingCode || !diagramId}
+                className={`px-6 py-2 rounded-lg font-medium text-sm transition-all duration-200 flex items-center gap-2 ${
+                  generatingCode || !diagramId
+                    ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                    : "bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg"
+                }`}
+              >
+                {generatingCode ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Generate Code
+                  </>
+                )}
+              </button> */}
             </nav>
           </div>
         </div>
@@ -459,7 +656,7 @@ export const Project = () => {
 
           {activeTab === "editor" && (
             <div className="flex justify-center">
-              <CodeEditorPreview projectId={projectId} />
+              {/* <CodeEditorPreview projectId={projectId} /> */}
             </div>
           )}
         </div>

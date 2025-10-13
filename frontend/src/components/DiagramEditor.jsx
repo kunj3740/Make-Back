@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Plus, Save, Trash2, Database, Loader, Key, Type, Hash, Calendar, ToggleLeft, FileText, Move, ArrowLeft } from 'lucide-react';
+import { Plus, Save, Trash2, Database, Loader, Key, Type, Hash, Calendar, ToggleLeft, FileText, Move, ArrowLeft, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 import { BACKEND_URL } from '../config';
 import { Bot } from 'lucide-react';
@@ -20,6 +20,10 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
   const [currentProjectId, setCurrentProjectId] = useState(projectId);
   const [showAIChatbot, setShowAIChatbot] = useState(false);
 
+  // New state for tracking changes and model generation
+  const [lastSavedEntities, setLastSavedEntities] = useState([]);
+  const [hasStructuralChanges, setHasStructuralChanges] = useState(false);
+
   // New state for drag-to-connect functionality
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionStart, setConnectionStart] = useState(null);
@@ -27,6 +31,67 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
   const [tempConnectionPath, setTempConnectionPath] = useState(null);
   const [InStateProjectId , setInStateProjectId ] = useState("");
   const canvasRef = useRef(null);
+
+  // Helper function to check if changes are only positional
+  const hasOnlyPositionalChanges = useCallback((currentEntities, savedEntities) => {
+    if (currentEntities.length !== savedEntities.length) {
+      return false; // Different number of entities means structural change
+    }
+
+    for (let i = 0; i < currentEntities.length; i++) {
+      const current = currentEntities[i];
+      const saved = savedEntities.find(e => e.id === current.id);
+      
+      if (!saved) {
+        return false; // New entity means structural change
+      }
+
+      // Check if anything other than x, y coordinates changed
+      const currentWithoutPosition = { ...current };
+      delete currentWithoutPosition.x;
+      delete currentWithoutPosition.y;
+      
+      const savedWithoutPosition = { ...saved };
+      delete savedWithoutPosition.x;
+      delete savedWithoutPosition.y;
+
+      if (JSON.stringify(currentWithoutPosition) !== JSON.stringify(savedWithoutPosition)) {
+        return false; // Structural change detected
+      }
+    }
+
+    return true; // Only positional changes
+  }, []);
+
+  // Enhanced setEntities with change tracking
+  const setEntitiesWithChangeTracking = useCallback((newEntities) => {
+    if (typeof newEntities === 'function') {
+      setEntities(prevEntities => {
+        const updatedEntities = newEntities(prevEntities);
+        
+        // Check if this is a structural change
+        if (lastSavedEntities.length > 0) {
+          const isOnlyPositional = hasOnlyPositionalChanges(updatedEntities, lastSavedEntities);
+          setHasStructuralChanges(!isOnlyPositional);
+        } else {
+          // First time setting entities or no saved state yet
+          setHasStructuralChanges(true);
+        }
+        
+        return updatedEntities;
+      });
+    } else {
+      setEntities(newEntities);
+      
+      // Check if this is a structural change
+      if (lastSavedEntities.length > 0) {
+        const isOnlyPositional = hasOnlyPositionalChanges(newEntities, lastSavedEntities);
+        setHasStructuralChanges(!isOnlyPositional);
+      } else {
+        setHasStructuralChanges(true);
+      }
+    }
+  }, [lastSavedEntities, hasOnlyPositionalChanges]);
 
   // Function to get userId from token if not provided as prop
   const getUserIdFromToken = useCallback(() => {
@@ -122,9 +187,12 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
         const existingDiagram = await loadExistingDiagramForProject(currentProjectId);
         if (existingDiagram) {
           setCurrentDiagramId(existingDiagram._id);
-          setEntities(existingDiagram.entities || []);
+          const loadedEntities = existingDiagram.entities || [];
+          setEntities(loadedEntities);
+          setLastSavedEntities(JSON.parse(JSON.stringify(loadedEntities))); // Deep copy
           setDiagramName(existingDiagram.name || 'Untitled Diagram');
           setLastSaved(new Date(existingDiagram.updatedAt));
+          setHasStructuralChanges(false); // No changes yet since we just loaded
           console.log('Loaded existing diagram for project:', existingDiagram.name);
         }
       }
@@ -133,16 +201,19 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
     loadDiagramData();
   }, [currentUserId, currentProjectId, currentDiagramId]);
 
-  // Auto-save functionality
+  // Auto-save functionality - only auto-save for positional changes
   useEffect(() => {
-    if (entities.length > 0 && currentUserId && currentProjectId) {
-      const saveTimer = setTimeout(() => {
-        autoSave();
-      }, 5000); // Auto-save after 5 seconds of inactivity
+    if (entities.length > 0 && currentUserId && currentProjectId && currentDiagramId) {
+      // Only auto-save if there are only positional changes (not structural)
+      if (!hasStructuralChanges && lastSavedEntities.length > 0) {
+        const saveTimer = setTimeout(() => {
+          autoSave();
+        }, 5000); // Auto-save after 5 seconds of inactivity
 
-      return () => clearTimeout(saveTimer);
+        return () => clearTimeout(saveTimer);
+      }
     }
-  }, [entities, currentDiagramId, currentUserId, currentProjectId]);
+  }, [entities, currentDiagramId, currentUserId, currentProjectId, hasStructuralChanges]);
 
   // API Functions
   const loadDiagram = async () => {
@@ -159,15 +230,94 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
       
       if (response.data.success) {
         const diagram = response.data.data;
-        setEntities(diagram.entities || []);
+        const loadedEntities = diagram.entities || [];
+        setEntities(loadedEntities);
+        setLastSavedEntities(JSON.parse(JSON.stringify(loadedEntities))); // Deep copy
         setDiagramName(diagram.name || 'Untitled Diagram');
         setLastSaved(new Date(diagram.updatedAt));
+        setHasStructuralChanges(false); // No changes yet since we just loaded
       }
     } catch (error) {
       console.error('Error loading diagram:', error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Validation function for entities and references
+  const validateDiagram = () => {
+    const errors = [];
+    const entityNames = new Set();
+
+    // Check for empty or duplicate entity names
+    entities.forEach((entity, index) => {
+      if (!entity.name || entity.name.trim() === '') {
+        errors.push(`Entity #${index + 1} has an empty name. Please provide a valid table name.`);
+      } else if (entityNames.has(entity.name.trim())) {
+        errors.push(`Duplicate entity name "${entity.name}". Each table must have a unique name.`);
+      } else {
+        entityNames.add(entity.name.trim());
+      }
+    });
+
+    // Validate attributes and references
+    entities.forEach((entity) => {
+      if (!entity.name || entity.name.trim() === '') return; // Skip if entity name is invalid
+
+      const attributeNames = new Set();
+
+      entity.attributes.forEach((attr, attrIndex) => {
+        // Check for empty attribute names
+        if (!attr.name || attr.name.trim() === '') {
+          errors.push(`Entity "${entity.name}" has an attribute #${attrIndex + 1} with an empty name.`);
+        } else if (attributeNames.has(attr.name.trim())) {
+          errors.push(`Entity "${entity.name}" has duplicate attribute "${attr.name}".`);
+        } else {
+          attributeNames.add(attr.name.trim());
+        }
+
+        // Validate references
+        if (attr.ref && attr.ref.trim() !== '') {
+          const refParts = attr.ref.trim().split('.');
+          
+          if (refParts.length !== 2) {
+            errors.push(
+              `Invalid reference format in "${entity.name}.${attr.name}". ` +
+              `Reference should be "TableName.fieldName" (e.g., User.id).`
+            );
+          } else {
+            const [refEntityName, refAttrName] = refParts;
+            
+            // Check if referenced entity exists
+            const refEntity = entities.find(e => e.name === refEntityName);
+            if (!refEntity) {
+              errors.push(
+                `Reference "${attr.ref}" in "${entity.name}.${attr.name}" points to non-existent table "${refEntityName}".`
+              );
+            } else {
+              // Check if referenced attribute exists
+              const refAttribute = refEntity.attributes.find(a => a.name === refAttrName);
+              if (!refAttribute) {
+                errors.push(
+                  `Reference "${attr.ref}" in "${entity.name}.${attr.name}" points to non-existent field "${refAttrName}" in table "${refEntityName}".`
+                );
+              } else {
+                // Check if data types match
+                if (attr.type !== refAttribute.type) {
+                  errors.push(
+                    `Type mismatch in "${entity.name}.${attr.name}": ` +
+                    `Field type is "${attr.type}" but references "${refEntityName}.${refAttrName}" which is "${refAttribute.type}". ` +
+                    `Types must match for foreign key relationships.`
+                  );
+                }
+              }
+            }
+          }
+        }
+      });
+    });
+
+    return errors;
   };
 
   const saveDiagram = async (showNotification = true) => {
@@ -184,15 +334,31 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
       alert('Project ID is required. Please navigate from a valid project.');
       return;
     }
+
+    // Validate diagram before saving
+    const validationErrors = validateDiagram();
+    if (validationErrors.length > 0) {
+      const errorMessage = 'Please fix the following errors before saving:\n\n' + 
+        validationErrors.map((err, idx) => `${idx + 1}. ${err}`).join('\n');
+      alert(errorMessage);
+      return;
+    }
     
     setIsSaving(true);
     try {
+      // Determine if we should generate models
+      const shouldGenerateModels = !currentDiagramId || hasStructuralChanges;
+      
       const diagramData = {
         name: diagramName,
         projectId: resolvedProjectId,
-        entities
+        entities,
+        generateModels: shouldGenerateModels
       };
-      console.log(entities);
+      
+      console.log('Saving diagram with generateModels:', shouldGenerateModels);
+      console.log('Entities:', entities);
+      
       const token = authToken || localStorage.getItem('token');
       const config = {
         headers: {
@@ -205,8 +371,19 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
       if (currentDiagramId) {
         // Update existing diagram
         response = await axios.put(`${BACKEND_URL}/api/v1/diagrams/${currentDiagramId}`, diagramData, config);
+        if (shouldGenerateModels) {
+          await axios.post(
+            `${BACKEND_URL}/api/v1/diagrams/generate`,
+            { diagramId: currentDiagramId },
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            },
+          );
+        }
       } else {
-        // Create new diagram
+        // Create new diagram (always generate models for new diagrams)
         response = await axios.post(`${BACKEND_URL}/api/v1/diagrams`, diagramData, config);
         if (response.data.success) {
           setCurrentDiagramId(response.data.data._id);
@@ -214,9 +391,16 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
       }
 
       if (response.data.success) {
+        // Update last saved state
+        setLastSavedEntities(JSON.parse(JSON.stringify(entities))); // Deep copy
         setLastSaved(new Date());
+        setHasStructuralChanges(false); // Reset change tracking
+        
         if (showNotification) {
-          alert('Diagram saved successfully!');
+          const message = shouldGenerateModels 
+            ? 'Diagram saved and models regenerated successfully!' 
+            : 'Diagram saved successfully!';
+          alert(message);
         }
       } else {
         throw new Error(response.data.message || 'Failed to save diagram');
@@ -240,7 +424,14 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
 
   const autoSave = async () => {
     if (entities.length > 0 && currentUserId && currentProjectId) {
-      await saveDiagram(false); // Silent save
+      // Validate before auto-saving
+      const validationErrors = validateDiagram();
+      if (validationErrors.length === 0) {
+        // Only auto-save if there are no validation errors
+        await saveDiagram(false); // Silent save
+      }
+      // Silently skip auto-save if there are validation errors
+      // User will see errors when they manually save
     }
   };
 
@@ -267,7 +458,7 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
       const newX = e.clientX - rect.left - dragOffset.x;
       const newY = e.clientY - rect.top - dragOffset.y;
       
-      setEntities(prev => prev.map(entity => 
+      setEntitiesWithChangeTracking(prev => prev.map(entity => 
         entity.id === selectedEntity 
           ? { ...entity, x: Math.max(0, newX), y: Math.max(0, newY) }
           : entity
@@ -319,7 +510,7 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
         { name: 'id', type: 'number', unique: true, default: '', ref: '' }
       ]
     };
-    setEntities([...entities, newEntity]);
+    setEntitiesWithChangeTracking([...entities, newEntity]);
   }, [entities]);
 
   const handleMouseDown = (e, entity) => {
@@ -374,7 +565,7 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
   };
 
   const addAttribute = (entityId) => {
-    setEntities(prev => prev.map(entity => 
+    setEntitiesWithChangeTracking(prev => prev.map(entity => 
       entity.id === entityId 
         ? { 
             ...entity, 
@@ -385,7 +576,7 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
   };
 
   const updateAttribute = (entityId, attrIndex, field, value) => {
-    setEntities(prev => prev.map(entity => 
+    setEntitiesWithChangeTracking(prev => prev.map(entity => 
       entity.id === entityId 
         ? {
             ...entity,
@@ -398,17 +589,17 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
   };
 
   const updateEntityName = (entityId, name) => {
-    setEntities(prev => prev.map(entity => 
+    setEntitiesWithChangeTracking(prev => prev.map(entity => 
       entity.id === entityId ? { ...entity, name } : entity
     ));
   };
 
   const deleteEntity = (entityId) => {
-    setEntities(prev => prev.filter(entity => entity.id !== entityId));
+    setEntitiesWithChangeTracking(prev => prev.filter(entity => entity.id !== entityId));
   };
 
   const deleteAttribute = (entityId, attrIndex) => {
-    setEntities(prev => prev.map(entity => 
+    setEntitiesWithChangeTracking(prev => prev.map(entity => 
       entity.id === entityId 
         ? {
             ...entity,
@@ -439,10 +630,549 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
     if (attributeIndex === -1) return null;
     
     return {
-      x: entity.x + 240, // Right edge of entity (increased from 200)
-      y: entity.y + 40 + (attributeIndex * 32) + 16 // Header height + attribute offset + half attribute height
+      x: entity.x + 240,
+      y: entity.y + 40 + (attributeIndex * 32) + 16
     };
   };
+// import React, { useState, useRef, useCallback, useEffect } from 'react';
+// import { Plus, Save, Trash2, Database, Loader, Key, Type, Hash, Calendar, ToggleLeft, FileText, Move, ArrowLeft } from 'lucide-react';
+// import axios from 'axios';
+// import { BACKEND_URL } from '../config';
+// import { Bot } from 'lucide-react';
+// import AIChatbot from './AIchatBot';
+// import { Link } from 'react-router-dom'
+
+// const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
+//   const [entities, setEntities] = useState([]);
+//   const [selectedEntity, setSelectedEntity] = useState(null);
+//   const [isDragging, setIsDragging] = useState(false);
+//   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+//   const [diagramName, setDiagramName] = useState('ER Diagram');
+//   const [isLoading, setIsLoading] = useState(false);
+//   const [isSaving, setIsSaving] = useState(false);
+//   const [lastSaved, setLastSaved] = useState(null);
+//   const [currentDiagramId, setCurrentDiagramId] = useState(diagramId);
+//   const [currentUserId, setCurrentUserId] = useState(userId);
+//   const [currentProjectId, setCurrentProjectId] = useState(projectId);
+//   const [showAIChatbot, setShowAIChatbot] = useState(false);
+
+//   // New state for tracking changes and model generation
+//   const [lastSavedEntities, setLastSavedEntities] = useState([]);
+//   const [hasStructuralChanges, setHasStructuralChanges] = useState(false);
+
+//   // New state for drag-to-connect functionality
+//   const [isConnecting, setIsConnecting] = useState(false);
+//   const [connectionStart, setConnectionStart] = useState(null);
+//   const [connectionEnd, setConnectionEnd] = useState(null);
+//   const [tempConnectionPath, setTempConnectionPath] = useState(null);
+//   const [InStateProjectId , setInStateProjectId ] = useState("");
+//   const canvasRef = useRef(null);
+
+//   // Helper function to check if changes are only positional
+//   const hasOnlyPositionalChanges = useCallback((currentEntities, savedEntities) => {
+//     if (currentEntities.length !== savedEntities.length) {
+//       return false; // Different number of entities means structural change
+//     }
+
+//     for (let i = 0; i < currentEntities.length; i++) {
+//       const current = currentEntities[i];
+//       const saved = savedEntities.find(e => e.id === current.id);
+      
+//       if (!saved) {
+//         return false; // New entity means structural change
+//       }
+
+//       // Check if anything other than x, y coordinates changed
+//       const currentWithoutPosition = { ...current };
+//       delete currentWithoutPosition.x;
+//       delete currentWithoutPosition.y;
+      
+//       const savedWithoutPosition = { ...saved };
+//       delete savedWithoutPosition.x;
+//       delete savedWithoutPosition.y;
+
+//       if (JSON.stringify(currentWithoutPosition) !== JSON.stringify(savedWithoutPosition)) {
+//         return false; // Structural change detected
+//       }
+//     }
+
+//     return true; // Only positional changes
+//   }, []);
+
+//   // Enhanced setEntities with change tracking
+//   const setEntitiesWithChangeTracking = useCallback((newEntities) => {
+//     if (typeof newEntities === 'function') {
+//       setEntities(prevEntities => {
+//         const updatedEntities = newEntities(prevEntities);
+        
+//         // Check if this is a structural change
+//         if (lastSavedEntities.length > 0) {
+//           const isOnlyPositional = hasOnlyPositionalChanges(updatedEntities, lastSavedEntities);
+//           setHasStructuralChanges(!isOnlyPositional);
+//         } else {
+//           // First time setting entities or no saved state yet
+//           setHasStructuralChanges(true);
+//         }
+        
+//         return updatedEntities;
+//       });
+//     } else {
+//       setEntities(newEntities);
+      
+//       // Check if this is a structural change
+//       if (lastSavedEntities.length > 0) {
+//         const isOnlyPositional = hasOnlyPositionalChanges(newEntities, lastSavedEntities);
+//         setHasStructuralChanges(!isOnlyPositional);
+//       } else {
+//         setHasStructuralChanges(true);
+//       }
+//     }
+//   }, [lastSavedEntities, hasOnlyPositionalChanges]);
+
+//   // Function to get userId from token if not provided as prop
+//   const getUserIdFromToken = useCallback(() => {
+//     if (currentUserId) return currentUserId;
+    
+//     try {
+//       const token = authToken || localStorage.getItem('token');
+//       if (token) {
+//         const payload = JSON.parse(atob(token.split('.')[1]));
+//         return payload.id || payload.userId;
+//       }
+//     } catch (error) {
+//       console.error('Error decoding token:', error);
+//     }
+//     return null;
+//   }, [currentUserId, authToken]);
+
+//   // Function to get projectId from URL params if not provided as prop
+//   const getProjectIdFromParams = useCallback(() => {
+//     if (currentProjectId) return currentProjectId;
+    
+//     try {
+//       const urlParams = new URLSearchParams(window.location.search);
+//       const pathParts = window.location.pathname.split('/');
+      
+//       // Try to get from URL params first
+//       const projectIdFromParams = urlParams.get('projectId');
+//       if (projectIdFromParams) return projectIdFromParams;
+      
+//       // Try to get from path (assuming URL structure like /projects/:projectId/diagrams)
+//       const projectIndex = pathParts.indexOf('projects');
+//       if (projectIndex !== -1 && pathParts[projectIndex + 1]) {
+//         return pathParts[projectIndex + 1];
+//       }
+//     } catch (error) {
+//       console.error('Error getting projectId from params:', error);
+//     }
+//     return null;
+//   }, [currentProjectId]);
+
+//   // Initialize IDs on component mount
+//   useEffect(() => {
+//     setInStateProjectId(projectId);
+//     const resolvedUserId = getUserIdFromToken();
+//     const resolvedProjectId = getProjectIdFromParams();
+    
+//     if (resolvedUserId) setCurrentUserId(resolvedUserId);
+//     if (resolvedProjectId) setCurrentProjectId(resolvedProjectId);
+    
+//     // Configure axios defaults
+//     const token = authToken || localStorage.getItem('token');
+//     if (token) {
+//       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+//     }
+//   }, [getUserIdFromToken, getProjectIdFromParams, authToken]);
+
+//   // NEW: Function to load existing diagram for the project
+//   const loadExistingDiagramForProject = async (projectId) => {
+//     if (!projectId) return null;
+    
+//     try {
+//       const token = authToken || localStorage.getItem('token');
+//       const response = await axios.get(`${BACKEND_URL}/api/v1/diagrams/from/project/${projectId}`, {
+//         headers: {
+//           'Authorization': `Bearer ${token}`
+//         }
+//       });
+      
+//       if (response.data.success) {
+//         return response.data.data;
+//       }
+//     } catch (error) {
+//       // If no diagram exists (404), that's fine - we'll create a new one
+//       if (error.response && error.response.status === 404) {
+//         console.log('No existing diagram found for project, will create new one');
+//         return null;
+//       }
+//       console.error('Error loading existing diagram:', error);
+//     }
+//     return null;
+//   };
+
+//   // Modified: Load existing diagram on component mount
+//   useEffect(() => {
+//     const loadDiagramData = async () => {
+//       if (!currentUserId) return;
+      
+//       if (currentDiagramId) {
+//         // If specific diagram ID is provided, load that diagram
+//         await loadDiagram();
+//       } else if (currentProjectId) {
+//         // If no diagram ID but project ID exists, try to load existing diagram for project
+//         const existingDiagram = await loadExistingDiagramForProject(currentProjectId);
+//         if (existingDiagram) {
+//           setCurrentDiagramId(existingDiagram._id);
+//           const loadedEntities = existingDiagram.entities || [];
+//           setEntities(loadedEntities);
+//           setLastSavedEntities(JSON.parse(JSON.stringify(loadedEntities))); // Deep copy
+//           setDiagramName(existingDiagram.name || 'Untitled Diagram');
+//           setLastSaved(new Date(existingDiagram.updatedAt));
+//           setHasStructuralChanges(false); // No changes yet since we just loaded
+//           console.log('Loaded existing diagram for project:', existingDiagram.name);
+//         }
+//       }
+//     };
+
+//     loadDiagramData();
+//   }, [currentUserId, currentProjectId, currentDiagramId]);
+
+//   // Auto-save functionality
+//   useEffect(() => {
+//     if (entities.length > 0 && currentUserId && currentProjectId) {
+//       const saveTimer = setTimeout(() => {
+//         autoSave();
+//       }, 5000); // Auto-save after 5 seconds of inactivity
+
+//       return () => clearTimeout(saveTimer);
+//     }
+//   }, [entities, currentDiagramId, currentUserId, currentProjectId]);
+
+//   // API Functions
+//   const loadDiagram = async () => {
+//     if (!currentDiagramId) return;
+    
+//     setIsLoading(true);
+//     try {
+//       const token = authToken || localStorage.getItem('token');
+//       const response = await axios.get(`${BACKEND_URL}/api/v1/diagrams/${currentDiagramId}`, {
+//         headers: {
+//           'Authorization': `Bearer ${token}`
+//         }
+//       });
+      
+//       if (response.data.success) {
+//         const diagram = response.data.data;
+//         const loadedEntities = diagram.entities || [];
+//         setEntities(loadedEntities);
+//         setLastSavedEntities(JSON.parse(JSON.stringify(loadedEntities))); // Deep copy
+//         setDiagramName(diagram.name || 'Untitled Diagram');
+//         setLastSaved(new Date(diagram.updatedAt));
+//         setHasStructuralChanges(false); // No changes yet since we just loaded
+//       }
+//     } catch (error) {
+//       console.error('Error loading diagram:', error);
+//     } finally {
+//       setIsLoading(false);
+//     }
+//   };
+
+//   const saveDiagram = async (showNotification = true) => {
+//     // Ensure we have all required IDs
+//     const resolvedUserId = currentUserId || getUserIdFromToken();
+//     const resolvedProjectId = currentProjectId || getProjectIdFromParams();
+    
+//     if (!resolvedUserId) {
+//       alert('User authentication required. Please log in again.');
+//       return;
+//     }
+    
+//     if (!resolvedProjectId) {
+//       alert('Project ID is required. Please navigate from a valid project.');
+//       return;
+//     }
+    
+//     setIsSaving(true);
+//     try {
+//       // Determine if we should generate models
+//       const shouldGenerateModels = !currentDiagramId || hasStructuralChanges;
+      
+//       const diagramData = {
+//         name: diagramName,
+//         projectId: resolvedProjectId,
+//         entities,
+//         generateModels: shouldGenerateModels
+//       };
+      
+//       console.log('Saving diagram with generateModels:', shouldGenerateModels);
+//       console.log('Entities:', entities);
+      
+//       const token = authToken || localStorage.getItem('token');
+//       const config = {
+//         headers: {
+//           'Authorization': `Bearer ${token}`,
+//           'Content-Type': 'application/json'
+//         }
+//       };
+
+//       let response;
+//       if (currentDiagramId) {
+//         // Update existing diagram
+//         response = await axios.put(`${BACKEND_URL}/api/v1/diagrams/${currentDiagramId}`, diagramData, config);
+//         await axios.post(
+//                 `${BACKEND_URL}/api/v1/diagrams/generate`,
+//                 { diagramId: currentDiagramId },
+//                 {
+//                   headers: {
+//                     Authorization: `Bearer ${token}`,
+//                   },
+//                 },
+//               )
+//       } else {
+//         // Create new diagram (always generate models for new diagrams)
+//         response = await axios.post(`${BACKEND_URL}/api/v1/diagrams`, diagramData, config);
+//         if (response.data.success) {
+//           setCurrentDiagramId(response.data.data._id);
+//         }
+//       }
+
+//       if (response.data.success) {
+//         // Update last saved state
+//         setLastSavedEntities(JSON.parse(JSON.stringify(entities))); // Deep copy
+//         setLastSaved(new Date());
+//         setHasStructuralChanges(false); // Reset change tracking
+        
+//         if (showNotification) {
+//           const message = shouldGenerateModels 
+//             ? 'Diagram saved and models regenerated successfully!' 
+//             : 'Diagram saved successfully!';
+//           alert(message);
+//         }
+//       } else {
+//         throw new Error(response.data.message || 'Failed to save diagram');
+//       }
+//     } catch (error) {
+//       console.error('Error saving diagram:', error);
+      
+//       // More specific error messages
+//       if (error.response) {
+//         const errorMessage = error.response.data?.message || `Server error: ${error.response.status}`;
+//         alert(`Failed to save diagram: ${errorMessage}`);
+//       } else if (error.request) {
+//         alert('Failed to save diagram: No response from server. Please check your connection.');
+//       } else {
+//         alert(`Failed to save diagram: ${error.message}`);
+//       }
+//     } finally {
+//       setIsSaving(false);
+//     }
+//   };
+
+//   const autoSave = async () => {
+//     if (entities.length > 0 && currentUserId && currentProjectId) {
+//       await saveDiagram(false); // Silent save
+//     }
+//   };
+
+//   // Enhanced drag and drop functionality
+//   useEffect(() => {
+//     const handleMouseMove = (e) => {
+//       if (isConnecting && connectionStart && canvasRef.current) {
+//         const rect = canvasRef.current.getBoundingClientRect();
+//         const currentX = e.clientX - rect.left;
+//         const currentY = e.clientY - rect.top;
+        
+//         setTempConnectionPath({
+//           x1: connectionStart.x,
+//           y1: connectionStart.y,
+//           x2: currentX,
+//           y2: currentY
+//         });
+//         return;
+//       }
+      
+//       if (!isDragging || !selectedEntity || !canvasRef.current) return;
+      
+//       const rect = canvasRef.current.getBoundingClientRect();
+//       const newX = e.clientX - rect.left - dragOffset.x;
+//       const newY = e.clientY - rect.top - dragOffset.y;
+      
+//       setEntitiesWithChangeTracking(prev => prev.map(entity => 
+//         entity.id === selectedEntity 
+//           ? { ...entity, x: Math.max(0, newX), y: Math.max(0, newY) }
+//           : entity
+//       ));
+//     };
+
+//     const handleMouseUp = () => {
+//       if (isConnecting) {
+//         if (connectionStart && connectionEnd) {
+//           // Create the reference connection
+//           const sourceEntity = entities.find(e => e.id === connectionStart.entityId);
+//           const targetEntity = entities.find(e => e.id === connectionEnd.entityId);
+          
+//           if (sourceEntity && targetEntity) {
+//             const refValue = `${targetEntity.name}.${connectionEnd.attributeName}`;
+//             updateAttribute(connectionStart.entityId, connectionStart.attributeIndex, 'ref', refValue);
+//           }
+//         }
+        
+//         setIsConnecting(false);
+//         setConnectionStart(null);
+//         setConnectionEnd(null);
+//         setTempConnectionPath(null);
+//         return;
+//       }
+      
+//       setIsDragging(false);
+//       setSelectedEntity(null);
+//     };
+
+//     if (isDragging || isConnecting) {
+//       document.addEventListener('mousemove', handleMouseMove);
+//       document.addEventListener('mouseup', handleMouseUp);
+//     }
+
+//     return () => {
+//       document.removeEventListener('mousemove', handleMouseMove);
+//       document.removeEventListener('mouseup', handleMouseUp);
+//     };
+//   }, [isDragging, isConnecting, selectedEntity, dragOffset, connectionStart, connectionEnd, entities]);
+
+//   const addEntity = useCallback(() => {
+//     const newEntity = {
+//       id: Date.now(),
+//       name: `Entity_${entities.length + 1}`,
+//       x: 100 + (entities.length * 50) % 400,
+//       y: 100 + Math.floor(entities.length / 8) * 200,
+//       attributes: [
+//         { name: 'id', type: 'number', unique: true, default: '', ref: '' }
+//       ]
+//     };
+//     setEntitiesWithChangeTracking([...entities, newEntity]);
+//   }, [entities]);
+
+//   const handleMouseDown = (e, entity) => {
+//     e.preventDefault();
+//     e.stopPropagation();
+    
+//     setIsDragging(true);
+//     setSelectedEntity(entity.id);
+    
+//     const rect = canvasRef.current.getBoundingClientRect();
+//     setDragOffset({
+//       x: e.clientX - rect.left - entity.x,
+//       y: e.clientY - rect.top - entity.y
+//     });
+//   };
+
+//   // New function to handle connection start
+//   const startConnection = (e, entityId, attributeIndex, attributeName) => {
+//     e.preventDefault();
+//     e.stopPropagation();
+    
+//     const entity = entities.find(e => e.id === entityId);
+//     if (!entity) return;
+    
+//     const attributePos = getAttributePosition(entity, attributeName);
+//     if (!attributePos) return;
+    
+//     setIsConnecting(true);
+//     setConnectionStart({
+//       entityId,
+//       attributeIndex,
+//       attributeName,
+//       x: attributePos.x,
+//       y: attributePos.y
+//     });
+//   };
+
+//   // New function to handle connection end
+//   const endConnection = (e, entityId, attributeName) => {
+//     e.preventDefault();
+//     e.stopPropagation();
+    
+//     if (!isConnecting || !connectionStart) return;
+    
+//     const entity = entities.find(e => e.id === entityId);
+//     if (!entity) return;
+    
+//     setConnectionEnd({
+//       entityId,
+//       attributeName
+//     });
+//   };
+
+//   const addAttribute = (entityId) => {
+//     setEntitiesWithChangeTracking(prev => prev.map(entity => 
+//       entity.id === entityId 
+//         ? { 
+//             ...entity, 
+//             attributes: [...entity.attributes, { name: '', type: 'string', unique: false, default: '', ref: '' }]
+//           }
+//         : entity
+//     ));
+//   };
+
+//   const updateAttribute = (entityId, attrIndex, field, value) => {
+//     setEntitiesWithChangeTracking(prev => prev.map(entity => 
+//       entity.id === entityId 
+//         ? {
+//             ...entity,
+//             attributes: entity.attributes.map((attr, idx) => 
+//               idx === attrIndex ? { ...attr, [field]: value } : attr
+//             )
+//           }
+//         : entity
+//     ));
+//   };
+
+//   const updateEntityName = (entityId, name) => {
+//     setEntitiesWithChangeTracking(prev => prev.map(entity => 
+//       entity.id === entityId ? { ...entity, name } : entity
+//     ));
+//   };
+
+//   const deleteEntity = (entityId) => {
+//     setEntitiesWithChangeTracking(prev => prev.filter(entity => entity.id !== entityId));
+//   };
+
+//   const deleteAttribute = (entityId, attrIndex) => {
+//     setEntitiesWithChangeTracking(prev => prev.map(entity => 
+//       entity.id === entityId 
+//         ? {
+//             ...entity,
+//             attributes: entity.attributes.filter((_, idx) => idx !== attrIndex)
+//           }
+//         : entity
+//     ));
+//   };
+
+//   const saveProject = () => {
+//     saveDiagram();
+//   };
+
+//   // Helper function to get type icon
+//   const getTypeIcon = (type) => {
+//     switch (type) {
+//       case 'number': return <Hash className="w-3 h-3" />;
+//       case 'date': return <Calendar className="w-3 h-3" />;
+//       case 'boolean': return <ToggleLeft className="w-3 h-3" />;
+//       case 'text': return <FileText className="w-3 h-3" />;
+//       default: return <Type className="w-3 h-3" />;
+//     }
+//   };
+
+//   // Helper function to find attribute position for arrows
+//   const getAttributePosition = (entity, attributeName) => {
+//     const attributeIndex = entity.attributes.findIndex(attr => attr.name === attributeName);
+//     if (attributeIndex === -1) return null;
+    
+//     return {
+//       x: entity.x + 240, // Right edge of entity (increased from 200)
+//       y: entity.y + 40 + (attributeIndex * 32) + 16 // Header height + attribute offset + half attribute height
+//     };
+//   };
 
   return (
    
@@ -502,11 +1232,16 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
             <span className="relative z-10">Add Entity</span>
           </button>
 
-          {/* Enhanced Save Button */}
+          {/* Enhanced Save Button with Change Indicator */}
           <button
             onClick={saveProject}
             disabled={isSaving}
-            className="group bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-400 hover:via-green-400 hover:to-emerald-500 disabled:from-emerald-700 disabled:via-green-700 disabled:to-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 px-5 py-2.5 rounded-xl flex items-center space-x-2 transition-all duration-300 shadow-xl hover:shadow-emerald-500/30 ring-1 ring-emerald-400/20 hover:ring-emerald-400/40 hover:scale-105 disabled:hover:scale-100 font-medium text-white relative overflow-hidden"
+            className={`group bg-gradient-to-r ${
+              hasStructuralChanges 
+                ? 'from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:via-orange-400 hover:to-amber-500 shadow-amber-500/30 ring-amber-400/20 hover:ring-amber-400/40' 
+                : 'from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-400 hover:via-green-400 hover:to-emerald-500 shadow-emerald-500/30 ring-emerald-400/20 hover:ring-emerald-400/40'
+            } disabled:from-slate-700 disabled:via-slate-700 disabled:to-slate-800 disabled:cursor-not-allowed disabled:opacity-60 px-5 py-2.5 rounded-xl flex items-center space-x-2 transition-all duration-300 shadow-xl ring-1 hover:scale-105 disabled:hover:scale-100 font-medium text-white relative overflow-hidden`}
+            title={hasStructuralChanges ? 'Will regenerate models' : 'Will save positions only'}
           >
             <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 -skew-x-12 translate-x-[-100%] group-hover:translate-x-[200%] transition-transform duration-700"></div>
             {isSaving ? (
@@ -514,7 +1249,9 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
             ) : (
               <Save className="w-4 h-4 group-hover:scale-110 transition-transform duration-200 relative z-10" />
             )}
-            <span className="relative z-10">{isSaving ? "Saving..." : "Save"}</span>
+            <span className="relative z-10">
+              {isSaving ? "Saving..." : hasStructuralChanges ? "Save + Models" : "Save"}
+            </span>
           </button>
         </div>
       </div>
@@ -705,7 +1442,7 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
           ))}
 
           {/* Enhanced Relationship Arrows */}
-          <svg className="absolute inset-0 pointer-events-none" style={{ zIndex: 5 }}>
+          {/* <svg className="absolute inset-0 pointer-events-none" style={{ zIndex: 5 }}>
             <defs>
               <marker id="arrowhead" markerWidth="12" markerHeight="8" refX="11" refY="4" orient="auto">
                 <polygon
@@ -724,7 +1461,7 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
               </filter>
             </defs>
 
-            {/* Existing relationships with enhanced styling */}
+       
             {entities.map((entity) =>
               entity.attributes
                 .filter((attr) => attr.ref && attr.ref.includes("."))
@@ -753,7 +1490,7 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
 
                   return (
                     <g key={`${entity.id}-${idx}`}>
-                      {/* Glow effect */}
+                     
                       <path
                         d={pathData}
                         stroke="rgba(16, 185, 129, 0.3)"
@@ -761,7 +1498,7 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
                         fill="none"
                         filter="url(#glow)"
                       />
-                      {/* Main arrow */}
+                     
                       <path
                         d={pathData}
                         stroke="rgba(16, 185, 129, 0.9)"
@@ -770,7 +1507,7 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
                         markerEnd="url(#arrowhead)"
                         className="drop-shadow-lg"
                       />
-                      {/* Relationship label */}
+                    
                       <g>
                         <rect
                           x={midX + offsetX - 25}
@@ -797,7 +1534,6 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
                 }),
             )}
 
-            {/* Enhanced temporary connection line */}
             {tempConnectionPath && (
               <g>
                 <line
@@ -813,7 +1549,7 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
                 <circle cx={tempConnectionPath.x2} cy={tempConnectionPath.y2} r="4" fill="rgba(59, 130, 246, 0.8)" />
               </g>
             )}
-          </svg>
+          </svg> */}
 
           {/* Enhanced Welcome Message */}
           {entities.length === 0 && !isLoading && (
@@ -876,6 +1612,13 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
               <span>Last saved: {lastSaved.toLocaleTimeString()}</span>
             </div>
           )}
+          {/* Change indicator */}
+          {hasStructuralChanges && (
+            <div className="flex items-center space-x-2 px-2 py-1 bg-amber-500/20 rounded-md">
+              <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
+              <span className="text-amber-300 text-xs font-medium">Models will regenerate</span>
+            </div>
+          )}
         </div>
         <div className="flex items-center space-x-3">
           <div
@@ -907,11 +1650,11 @@ const DiagramEditor = ({ projectId, diagramId, userId, authToken }) => {
           isOpen={showAIChatbot}
           onClose={() => setShowAIChatbot(false)}
           onGenerateDiagram={(generatedEntities) => {
-            setEntities(generatedEntities);
+            setEntitiesWithChangeTracking(generatedEntities);
             setShowAIChatbot(false);
           }}
           entities={entities}
-          setEntities={setEntities}
+          setEntities={setEntitiesWithChangeTracking}
           projectId={currentProjectId}
         />
       )}

@@ -1,63 +1,67 @@
-import { useState, useEffect } from "react"
-import { Link } from "react-router-dom"
-import { Button } from "../components/ui/button"
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Button } from "../components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "../components/ui/dropdown-menu"
-import { Avatar, AvatarFallback } from "../components/ui/avatar"
-import { Folder, LogOut, Sparkles, FolderOpen } from "lucide-react"
+} from "../components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "../components/ui/avatar";
+import { Folder, LogOut, Sparkles, FolderOpen } from "lucide-react";
 
 export default function AppBar() {
-  const [user, setUser] = useState(null)
-  const [isScrolled, setIsScrolled] = useState(false)
+  const [user, setUser] = useState(null);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const navigate = useNavigate(); // ✅ for redirecting after logout
 
   useEffect(() => {
-    const token = localStorage?.getItem('token')
-    if (!token) return
+    const token = localStorage?.getItem("token");
+    if (!token) return;
 
     try {
-      const payload = JSON.parse(atob(token.split('.')[1]))
+      const payload = JSON.parse(atob(token.split(".")[1]));
       setUser({
-        username: payload.username || payload.user || payload.name || 'User',
-        email: payload.email || ''
-      })
+        username: payload.username || payload.user || payload.name || "User",
+        email: payload.email || "",
+      });
     } catch (error) {
-      console.error('Invalid token:', error)
-      localStorage?.removeItem('token')
+      console.error("Invalid token:", error);
+      localStorage?.removeItem("token");
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 20)
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [])
+    const handleScroll = () => setIsScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const handleSignOut = () => {
-    localStorage?.removeItem('token')
-    setUser(null)
-  }
+    localStorage?.removeItem("token");
+    setUser(null);
+    navigate("/signin", { replace: true }); // ✅ redirect to login page
+  };
 
   const getUserInitial = () => {
-    return user?.username?.charAt(0)?.toUpperCase() || 'U'
-  }
+    return user?.username?.charAt(0)?.toUpperCase() || "U";
+  };
 
   return (
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         isScrolled
-          ? 'bg-gray-900/80 backdrop-blur-xl border-b border-gray-700/50 shadow-lg shadow-black/10'
-          : 'bg-transparent'
+          ? "bg-gray-900/80 backdrop-blur-xl border-b border-gray-700/50 shadow-lg shadow-black/10"
+          : "bg-transparent"
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-
           {/* Logo/Brand */}
-          <Link to="/" className="flex items-center space-x-2 group cursor-pointer">
+          <Link
+            to="/"
+            className="flex items-center space-x-2 group cursor-pointer"
+          >
             <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg group-hover:shadow-blue-500/25 transition-all duration-200">
               <Sparkles className="w-4 h-4 text-white" />
             </div>
@@ -87,7 +91,10 @@ export default function AppBar() {
 
                 {/* My Projects - Mobile */}
                 <div className="md:hidden">
-                  <Link to="/projects" className="p-2 text-gray-300 hover:text-white transition-colors duration-200 rounded-lg hover:bg-gray-800/30">
+                  <Link
+                    to="/projects"
+                    className="p-2 text-gray-300 hover:text-white transition-colors duration-200 rounded-lg hover:bg-gray-800/30"
+                  >
                     <Folder className="w-5 h-5" />
                   </Link>
                 </div>
@@ -111,9 +118,13 @@ export default function AppBar() {
                     align="end"
                   >
                     <div className="px-3 py-2 border-b border-gray-700/50">
-                      <p className="text-sm font-medium text-white">{user.username}</p>
+                      <p className="text-sm font-medium text-white">
+                        {user.username}
+                      </p>
                       {user.email && (
-                        <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                        <p className="text-xs text-gray-400 truncate">
+                          {user.email}
+                        </p>
                       )}
                     </div>
                     <DropdownMenuItem
@@ -138,5 +149,5 @@ export default function AppBar() {
         </div>
       </div>
     </header>
-  )
+  );
 }

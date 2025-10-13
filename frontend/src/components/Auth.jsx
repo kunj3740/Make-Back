@@ -1,8 +1,8 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import axios from "axios"
-import { toast, Toaster } from "react-hot-toast"
-import { GoogleLogin } from '@react-oauth/google'
+import { toast } from "react-hot-toast"
+import { GoogleLogin } from "@react-oauth/google"
 import { BACKEND_URL } from "../config"
 
 export default function Auth({ type }) {
@@ -13,26 +13,47 @@ export default function Auth({ type }) {
     password: "",
   })
 
+  const GITHUB_CLIENT_ID = import.meta.env.VITE_GITHUB_CLIENT_ID
+  // Fixed: Use consistent redirect URI that matches your GitHub OAuth app settings
+  const REDIRECT_URI = `${window.location.origin}/auth/github/callback`
+
+  // Handle GitHub callback
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const code = urlParams.get("code")
+    const state = urlParams.get("state")
+
+    // Fixed: Check for the correct callback path and prevent double execution
+    if (code && (window.location.pathname === "/auth/github/callback" || window.location.pathname === "/signin")) {
+      // Use a more specific flag to prevent double execution
+      const processingFlag = `github_processing_${code}_${state}`
+      const isProcessing = sessionStorage.getItem(processingFlag)
+      
+      if (!isProcessing) {
+        sessionStorage.setItem(processingFlag, "true")
+        handleGithubCallback(code, state).finally(() => {
+          // Clean up the specific processing flag
+          sessionStorage.removeItem(processingFlag)
+        })
+      }
+    }
+  }, [])
+
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    })
+    setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
   const handleSubmit = async () => {
     try {
       toast.loading("Authenticating...")
       const endpoint = type === "signup" ? "signup" : "signin"
-      const response = await axios.post(`${BACKEND_URL}/api/v1/user/${endpoint}`, formData)
-
-      if (!response) return toast.error("Authentication failed")
+      const res = await axios.post(`${BACKEND_URL}/api/v1/user/${endpoint}`, formData)
 
       toast.dismiss()
       toast.success("Success!")
-      localStorage.setItem("token", response.data)
+      localStorage.setItem("token", res.data)
       navigate("/projects")
-    } catch (err) {
+    } catch {
       toast.dismiss()
       toast.error("Authentication error")
     }
@@ -41,26 +62,146 @@ export default function Auth({ type }) {
   const handleGoogleSuccess = async (credentialResponse) => {
     try {
       toast.loading("Google Authentication in progress")
-      const response = await axios.post(`${BACKEND_URL}/api/v1/user/google-auth`, {
+      const res = await axios.post(`${BACKEND_URL}/api/v1/user/google-auth`, {
         token: credentialResponse.credential,
       })
 
-      if (!response) return toast.error("Google auth failed")
-
       toast.dismiss()
       toast.success("Logged in with Google!")
-      localStorage.setItem("token", response.data.token)
+      localStorage.setItem("token", res.data.token)
       navigate("/projects")
-    } catch (err) {
+    } catch {
       toast.dismiss()
       toast.error("Google login failed")
     }
   }
 
-  const handleGoogleError = () => {
-    toast.error("Google sign-in was unsuccessful. Please try again.")
+  const handleGoogleError = () => toast.error("Google sign-in failed")
+
+  // GitHub login flow
+  const handleGithubLogin = () => {
+    if (!GITHUB_CLIENT_ID) {
+      toast.error("GitHub not configured")
+      return
+    }
+
+    // Fixed: Generate a more secure state parameter
+    const state = btoa(crypto.randomUUID() + Date.now())
+    localStorage.setItem("github_oauth_state", state)
+
+    // Fixed: Add more specific scopes if needed
+    const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(
+      REDIRECT_URI
+    )}&scope=user:email&state=${state}&allow_signup=true`
+
+    console.log("Redirecting to GitHub with state:", state) // Debug log
+    window.location.href = githubAuthUrl
+  }
+  // GitHub callback
+  const handleGithubCallback = async (code, state) => {
+    console.log("GitHub callback received:", { code: !!code, state }) // Debug log
+    console.log("Current localStorage keys:", Object.keys(localStorage)) // Debug log
+    
+    const storedState = localStorage.getItem("github_oauth_state")
+    console.log("Stored state:", storedState) // Debug log
+    
+    // Check if we're in an environment where localStorage works
+    if (typeof Storage === "undefined") {
+      console.error("localStorage not supported")
+      toast.error("Browser storage not supported")
+      navigate("/signin")
+      return
+    }
+    
+    // Try to recover state from sessionStorage as fallback
+    if (!storedState) {
+      const sessionState = sessionStorage.getItem("github_oauth_state")
+      if (sessionState) {
+        console.log("Found state in sessionStorage:", sessionState)
+        localStorage.setItem("github_oauth_state", sessionState)
+        sessionStorage.removeItem("github_oauth_state")
+      }
+    }
+    
+    const finalStoredState = localStorage.getItem("github_oauth_state")
+    
+    // Fixed: More detailed state validation
+    if (!finalStoredState) {
+      console.error("No stored state found in localStorage or sessionStorage")
+      toast.error("Authentication error: Session expired. Please try again.")
+      navigate("/signin")
+      return
+    }
+
+    if (!state) {
+      console.error("No state parameter received")
+      toast.error("Authentication error: No state parameter")
+      localStorage.removeItem("github_oauth_state")
+      navigate("/signin")
+      return
+    }
+
+    if (state !== finalStoredState) {
+      console.error("State mismatch:", { received: state, stored: finalStoredState })
+      toast.error("Authentication error: Invalid state parameter")
+      localStorage.removeItem("github_oauth_state")
+      navigate("/signin")
+      return
+    }
+
+    // Clean up state immediately after validation
+    localStorage.removeItem("github_oauth_state")
+    sessionStorage.removeItem("github_oauth_state")
+
+    try {
+      toast.loading("GitHub Authentication in progress")
+
+      console.log("Sending to backend:", { code, redirect_uri: REDIRECT_URI }) // Debug log
+
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Authentication timeout')), 30000) // 30 second timeout
+      })
+
+      // send code to backend (backend will exchange for access_token)
+      const apiCall = axios.post(`${BACKEND_URL}/api/v1/user/github-auth`, {
+        code,
+        redirect_uri: REDIRECT_URI,
+      }, {
+        timeout: 25000 // 25 second axios timeout
+      })
+
+      const res = await Promise.race([apiCall, timeoutPromise])
+
+      toast.dismiss()
+      toast.success("Logged in with GitHub!")
+      localStorage.setItem("token", res.data.token)
+
+      // clean URL and navigate
+      window.history.replaceState({}, document.title, "/projects")
+      navigate("/projects")
+    } catch (err) {
+      console.error("GitHub auth error:", err)
+      console.error("Error response:", err.response?.data) // More detailed error logging
+      toast.dismiss()
+      
+      let errorMessage = "GitHub login failed"
+      if (err.message === 'Authentication timeout') {
+        errorMessage = "Authentication timed out. Please try again."
+      } else if (err.response?.status === 500) {
+        errorMessage = "Server error. Please check your backend configuration."
+      } else if (err.response?.data?.message) {
+        errorMessage = `GitHub login failed: ${err.response.data.message}`
+      }
+      
+      toast.error(errorMessage)
+      navigate("/signin")
+    }
   }
 
+  // Callback logic is now handled by separate GitHubCallback component
+  // Remove the callback loading screen from here since we have a dedicated component
+  
   return (
     <div className="min-h-screen flex justify-center items-center bg-gradient-to-br from-gray-900 via-black to-gray-800 relative overflow-hidden">
       {/* Animated background elements */}
@@ -72,8 +213,6 @@ export default function Auth({ type }) {
 
       {/* Grid pattern overlay */}
       <div className="absolute inset-0 bg-grid-pattern opacity-10"></div>
-      
-    
       
       <div className="w-full max-w-md mt-10 relative z-10">
         <div className="bg-gray-900/80 backdrop-blur-xl border border-gray-700/50 rounded-2xl shadow-2xl p-8 relative overflow-hidden">
@@ -151,8 +290,9 @@ export default function Auth({ type }) {
               <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent"></div>
             </div>
             
-            <div className="flex justify-center">
-              <div className="bg-white/10 p-3 rounded-xl border border-gray-600/50 hover:border-gray-500/50 transition-all duration-200 hover:shadow-md hover:shadow-blue-500/20 w-full max-w-sm">
+            <div className="flex flex-col space-y-3">
+              {/* Google OAuth */}
+              <div className="bg-white/10 p-3 rounded-xl border border-gray-600/50 hover:border-gray-500/50 transition-all duration-200 hover:shadow-md hover:shadow-blue-500/20">
                 <GoogleLogin 
                   onSuccess={handleGoogleSuccess} 
                   onError={handleGoogleError} 
@@ -163,12 +303,23 @@ export default function Auth({ type }) {
                   shape="pill"
                 />
               </div>
+
+              {/* GitHub OAuth */}
+              <button
+                onClick={handleGithubLogin}
+                className="w-full bg-gray-700/50 hover:bg-gray-700/50 border border-gray-600/50 hover:border-gray-500/50 text-white font-medium py-3 px-4 rounded-xl transition-all duration-200 hover:shadow-md hover:shadow-gray-500/20 flex items-center justify-center space-x-3"
+              >
+                <svg className="w-5 h-3" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                </svg>
+                <span>Continue with GitHub</span>
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .bg-grid-pattern {
           background-image: 
             linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),

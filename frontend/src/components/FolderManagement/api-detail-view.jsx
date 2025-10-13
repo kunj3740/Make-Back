@@ -194,7 +194,7 @@ const ApiDetailView = ({ api, onUpdate, getMethodColor, loading, onAIUpdate }) =
                       <Edit2 className="h-4 w-4" />
                       <span>Manual Edit</span>
                     </div>
-                  </button>
+                  </button> 
                 </>
               )}
             </div>

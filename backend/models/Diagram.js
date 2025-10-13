@@ -1,5 +1,24 @@
 const mongoose = require('mongoose');
 
+const generatedModelSchema = new mongoose.Schema({
+  entityName: {
+    type: String,
+    required: true
+  },
+  path: {
+    type: String,
+    default: ''
+  },
+  code: {
+    type: String,
+    default: ''
+  },
+  generatedAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
 const attributeSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -65,6 +84,7 @@ const diagramSchema = new mongoose.Schema({
     required: true
   },
   entities: [entitySchema],
+  generatedModels: [generatedModelSchema], 
   diagramUrl: {
     type: String,
     default: '',
