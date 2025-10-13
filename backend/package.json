@@ -15,10 +15,10 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.15.2",
     "openai": "^5.3.0",
-    "puppeteer": "^24.20.0",
     "uuid": "^8.3.2"
   },
   "devDependencies": {
-    "@mermaid-js/mermaid-cli": "^11.9.0"
+    "@mermaid-js/mermaid-cli": "^11.9.0",
+    "puppeteer": "^23.11.1"
   }
 }
