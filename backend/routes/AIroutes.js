@@ -3,7 +3,7 @@ const { generateDatabaseSchema, chatWithAI, generateAPI, generateAPISuggestions,
      createAPIFromSuggestionName } = require('../controllers/AIController');
 const authMiddleware = require('../middleware/auth');
 
-const router = express.Router();
+const router = express.Router()
  
 // POST /api/ai/generate-schema
 router.post('/generate-schema', generateDatabaseSchema);
@@ -18,4 +18,4 @@ router.post('/chat', chatWithAI);
 
 router.post('/generate-api', generateAPI);
 
-module.exports = router;
+module.exports = router

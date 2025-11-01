@@ -5,11 +5,10 @@ const cors = require('cors')
 const authRoutes = require('./routes/authRoutes')
 const projectRoutes = require("./routes/projectRoutes");
 const diagramRoutes = require("./routes/diagramRoutes");
-const AIRoutes = require("./routes/aiRoutes");
 const folderRoutes = require("./routes/folderRoutes");
 const CompoGenRoutes = require("./routes/CompoGenRoutes");
 const CodeRoutes = require("./routes/CodeRoutes")
-
+const aiRoutes = require("./routes/aiRoutes")
 dotenv.config()
 
 const app = express()
@@ -22,9 +21,9 @@ app.use('/api/v1/user', authRoutes)
 app.use('/api/v1/projects', projectRoutes)
 app.use('/api/v1/diagrams' , diagramRoutes)
 app.use('/api/v1/folders' , folderRoutes)
-app.use('/api/ai', AIRoutes);
 app.use('/api/v1/components' , CompoGenRoutes)
 app.use('/api/v1/code' , CodeRoutes)
+app.use('/api/ai', aiRoutes);
 
 app.get("/api/v1/temp" , async (req , res ) => {
   return res.json({
