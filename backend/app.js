@@ -8,7 +8,7 @@ const diagramRoutes = require("./routes/diagramRoutes");
 const folderRoutes = require("./routes/folderRoutes");
 const CompoGenRoutes = require("./routes/CompoGenRoutes");
 const CodeRoutes = require("./routes/CodeRoutes")
-const aiRoutes = require("./routes/aiRoutes")
+const aiRoutes = require("./routes/GenAiRoutes")
 dotenv.config()
 
 const app = express()
