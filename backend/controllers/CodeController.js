@@ -415,6 +415,1318 @@ const Diagram = require('../models/Diagram');
 const Folder = require('../models/Folder');
 const Project = require('../models/Project');
 
+
+const { Octokit } = require('@octokit/rest');
+const User = require('../models/User');
+
+
+const archiver = require('archiver');
+
+const axios = require('axios');
+
+
+/**
+ * Deploy GitHub repository to Render using Blueprint
+ * @route POST /api/v1/deploy/render/:projectId
+ */
+const deployToRender = async (req, res) => {
+  try {
+    console.log('=== DEPLOY TO RENDER ===');
+    console.log('User ID:', req.userId);
+    console.log('Project ID:', req.params.projectId);
+
+    const { projectId } = req.params;
+
+    // Validate authentication
+    if (!req.userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    // Validate projectId
+    if (!projectId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Project ID is required'
+      });
+    }
+
+    // Fetch project with GitHub repo link
+    const project = await Project.findOne({
+      _id: projectId,
+      owner: req.userId
+    });
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found or access denied'
+      });
+    }
+
+    // Check if GitHub repo link exists
+    if (!project.githubRepoLink) {
+      return res.status(400).json({
+        success: false,
+        message: 'GitHub repository link not found. Please push your code to GitHub first.'
+      });
+    }
+
+    console.log('GitHub Repo Link:', project.githubRepoLink);
+
+    // Validate Render API key
+    const renderApiKey = process.env.RENDER_API_KEY;
+    if (!renderApiKey) {
+      return res.status(500).json({
+        success: false,
+        message: 'Render API key not configured on server'
+      });
+    }
+
+    // Extract repo details from GitHub URL
+    const repoMatch = project.githubRepoLink.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+    if (!repoMatch) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid GitHub repository URL format'
+      });
+    }
+
+    const [, repoOwner, repoName] = repoMatch;
+    const cleanRepoName = repoName.replace('.git', '');
+
+    // Generate unique service name
+    const timestamp = Date.now();
+    const serviceName = `${cleanRepoName}-${timestamp}`.toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .substring(0, 60);
+
+    console.log('Service Name:', serviceName);
+
+    // First, get the owner ID from Render API
+    console.log('Fetching Render account owner ID...');
+    let ownerId;
+    
+    try {
+      const ownerResponse = await axios.get(
+        'https://api.render.com/v1/owners',
+        {
+          headers: {
+            'Authorization': `Bearer ${renderApiKey}`,
+            'Accept': 'application/json'
+          },
+          timeout: 15000
+        }
+      );
+
+      // Get the first owner (usually your personal account)
+      const owners = ownerResponse.data;
+      if (owners && owners.length > 0) {
+        ownerId = owners[0].owner.id;
+        console.log('Owner ID found:', ownerId);
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'No Render account owner found. Please verify your Render API key.'
+        });
+      }
+    } catch (ownerError) {
+      console.error('Error fetching owner ID:', ownerError.response?.data);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch Render account information',
+        error: ownerError.response?.data?.message || ownerError.message
+      });
+    }
+
+    // Simplified Render API payload based on their docs
+    const deploymentPayload = {
+      type: 'web_service',
+      name: serviceName,
+      ownerId: ownerId, // REQUIRED FIELD
+      repo: project.githubRepoLink,
+      autoDeploy: 'yes',
+      branch: 'main',
+      rootDir: './',
+      serviceDetails: {
+        env: 'node',
+        region: 'oregon',
+        plan: 'free',
+        buildCommand: 'npm install',
+        startCommand: 'npm start',
+        healthCheckPath: '/',
+        envVars: [
+          {
+            key: 'NODE_ENV',
+            value: 'production'
+          }
+        ]
+      }
+    };
+
+    console.log('Deploying to Render...');
+
+    // Make request to Render API
+    const renderResponse = await axios.post(
+      'https://api.render.com/v1/services',
+      deploymentPayload,
+      {
+        headers: {
+          'Authorization': `Bearer ${renderApiKey}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        timeout: 30000
+      }
+    );
+
+    const service = renderResponse.data.service || renderResponse.data;
+    
+    console.log('✅ Service created on Render');
+    console.log('Response:', JSON.stringify(renderResponse.data, null, 2));
+
+    // Construct service URL
+    const serviceUrl = service.serviceDetails?.url || 
+                      service.url || 
+                      `https://${serviceName}.onrender.com`;
+
+    // Update project with deployment info
+    project.renderServiceId = service.id;
+    project.deploymentUrl = serviceUrl;
+    await project.save();
+
+    // Send success response
+    res.status(201).json({
+      success: true,
+      message: 'Successfully deployed to Render',
+      data: {
+        serviceId: service.id,
+        serviceName: service.name,
+        deploymentUrl: serviceUrl,
+        status: service.serviceDetails?.deployStatus || 'deploying',
+        region: service.serviceDetails?.region || 'oregon',
+        createdAt: service.createdAt,
+        githubRepo: project.githubRepoLink,
+        autoDeploy: true,
+        dashboard: `https://dashboard.render.com/web/${service.id}`,
+        logs: `https://dashboard.render.com/web/${service.id}/logs`,
+        settings: `https://dashboard.render.com/web/${service.id}/settings`
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error deploying to Render:', error);
+    console.error('Error response data:', JSON.stringify(error.response?.data, null, 2));
+    console.error('Error status:', error.response?.status);
+
+    // Handle specific Render API errors
+    if (error.response?.status === 401) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid Render API key. Please check your configuration.'
+      });
+    }
+
+    if (error.response?.status === 400) {
+      const errorMsg = error.response?.data?.message || 
+                      error.response?.data?.error || 
+                      'Invalid deployment configuration';
+      
+      return res.status(400).json({
+        success: false,
+        message: errorMsg,
+        details: error.response?.data
+      });
+    }
+
+    if (error.response?.status === 402) {
+      return res.status(402).json({
+        success: false,
+        message: 'Payment required. You may have reached your Render free tier limit.'
+      });
+    }
+
+    if (error.response?.status === 409) {
+      return res.status(409).json({
+        success: false,
+        message: 'Service with this name already exists on Render'
+      });
+    }
+
+    if (error.response?.status === 422) {
+      return res.status(422).json({
+        success: false,
+        message: 'Repository validation failed. Make sure your repository is public and contains a valid Node.js project with package.json',
+        details: error.response?.data
+      });
+    }
+
+    // Generic error response
+    res.status(500).json({
+      success: false,
+      message: 'Failed to deploy to Render',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong',
+      details: process.env.NODE_ENV === 'development' ? error.response?.data : undefined
+    });
+  }
+};
+
+/**
+ * Alternative: Deploy using Render Blueprint (YAML-based)
+ * This is more reliable and follows Render's recommended approach
+ */
+const deployToRenderWithBlueprint = async (req, res) => {
+  try {
+    console.log('=== DEPLOY TO RENDER WITH BLUEPRINT ===');
+    
+    const { projectId } = req.params;
+
+    if (!req.userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    const project = await Project.findOne({
+      _id: projectId,
+      owner: req.userId
+    });
+
+    if (!project || !project.githubRepoLink) {
+      return res.status(400).json({
+        success: false,
+        message: 'Project or GitHub repository not found'
+      });
+    }
+
+    const renderApiKey = process.env.RENDER_API_KEY;
+    if (!renderApiKey) {
+      return res.status(500).json({
+        success: false,
+        message: 'Render API key not configured'
+      });
+    }
+
+    // Extract repo info
+    const repoMatch = project.githubRepoLink.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+    if (!repoMatch) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid GitHub repository URL'
+      });
+    }
+
+    const [, repoOwner, repoName] = repoMatch;
+    const cleanRepoName = repoName.replace('.git', '');
+    const timestamp = Date.now();
+
+    // Create Blueprint YAML content
+    const blueprintYaml = `services:
+  - type: web
+    name: ${cleanRepoName}-${timestamp}
+    env: node
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000`;
+
+    console.log('Blueprint YAML:', blueprintYaml);
+
+    // Deploy using Blueprint
+    const response = await axios.post(
+      'https://api.render.com/v1/blueprints',
+      {
+        repo: project.githubRepoLink,
+        branch: 'main',
+        yaml: blueprintYaml
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${renderApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      }
+    );
+
+    const blueprint = response.data;
+    console.log('✅ Blueprint deployed');
+
+    // Extract service info from blueprint
+    const service = blueprint.services?.[0] || {};
+    const serviceUrl = service.serviceDetails?.url || `https://${cleanRepoName}-${timestamp}.onrender.com`;
+
+    // Update project
+    project.renderServiceId = service.id || blueprint.id;
+    project.deploymentUrl = serviceUrl;
+    await project.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Successfully deployed to Render using Blueprint',
+      data: {
+        blueprintId: blueprint.id,
+        serviceId: service.id,
+        serviceName: service.name,
+        deploymentUrl: serviceUrl,
+        status: 'deploying',
+        githubRepo: project.githubRepoLink
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Blueprint deployment error:', error);
+    console.error('Error response:', error.response?.data);
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to deploy with Blueprint',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong',
+      details: error.response?.data
+    });
+  }
+};
+
+/**
+ * Get deployment status
+ */
+const getDeploymentStatus = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+
+    if (!req.userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    const project = await Project.findOne({
+      _id: projectId,
+      owner: req.userId
+    });
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
+    }
+
+    if (!project.renderServiceId) {
+      return res.status(404).json({
+        success: false,
+        message: 'No deployment found for this project'
+      });
+    }
+
+    const renderApiKey = process.env.RENDER_API_KEY;
+    if (!renderApiKey) {
+      return res.status(500).json({
+        success: false,
+        message: 'Render API key not configured'
+      });
+    }
+
+    const response = await axios.get(
+      `https://api.render.com/v1/services/${project.renderServiceId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${renderApiKey}`
+        },
+        timeout: 15000
+      }
+    );
+
+    const service = response.data.service || response.data;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        serviceId: service.id,
+        serviceName: service.name,
+        status: service.serviceDetails?.deployStatus || 'unknown',
+        deploymentUrl: service.serviceDetails?.url || project.deploymentUrl,
+        lastDeployedAt: service.updatedAt,
+        region: service.serviceDetails?.region,
+        dashboard: `https://dashboard.render.com/web/${project.renderServiceId}`
+      }
+    });
+
+  } catch (error) {
+    console.error('Error getting status:', error);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get deployment status',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Delete deployment
+ */
+const deleteDeployment = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+
+    if (!req.userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    const project = await Project.findOne({
+      _id: projectId,
+      owner: req.userId
+    });
+
+    if (!project || !project.renderServiceId) {
+      return res.status(404).json({
+        success: false,
+        message: 'No deployment found'
+      });
+    }
+
+    const renderApiKey = process.env.RENDER_API_KEY;
+    if (!renderApiKey) {
+      return res.status(500).json({
+        success: false,
+        message: 'Render API key not configured'
+      });
+    }
+
+    await axios.delete(
+      `https://api.render.com/v1/services/${project.renderServiceId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${renderApiKey}`
+        },
+        timeout: 15000
+      }
+    );
+
+    // Clean up project
+    project.renderServiceId = undefined;
+    project.deploymentUrl = undefined;
+    await project.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Deployment deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Error deleting deployment:', error);
+
+    if (error.response?.status === 404) {
+      const project = await Project.findOne({
+        _id: req.params.projectId,
+        owner: req.userId
+      });
+      
+      if (project) {
+        project.renderServiceId = undefined;
+        project.deploymentUrl = undefined;
+        await project.save();
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: 'Deployment already deleted'
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete deployment',
+      error: error.message
+    });
+  }
+};
+
+
+
+// const axios = require('axios');
+
+// const deployToRender = async (req, res) => {
+//   try {
+//     console.log('=== DEPLOY TO RENDER ===');
+//     console.log('User ID:', req.userId);
+//     console.log('Project ID:', req.params.projectId);
+
+//     const { projectId } = req.params;
+
+//     // Validate authentication
+//     if (!req.userId) {
+//       return res.status(401).json({
+//         success: false,
+//         message: 'User not authenticated'
+//       });
+//     }
+
+//     // Validate projectId
+//     if (!projectId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Project ID is required'
+//       });
+//     }
+
+//     // Fetch project with GitHub repo link
+//     const project = await Project.findOne({
+//       _id: projectId,
+//       owner: req.userId
+//     });
+
+//     if (!project) {
+//       return res.status(404).json({
+//         success: false,
+//         message: 'Project not found or access denied'
+//       });
+//     }
+
+//     // Check if GitHub repo link exists
+//     if (!project.githubRepoLink) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'GitHub repository link not found. Please push your code to GitHub first.'
+//       });
+//     }
+
+//     console.log('GitHub Repo Link:', project.githubRepoLink);
+
+//     // Validate Render API key
+//     const renderApiKey = process.env.RENDER_API_KEY;
+//     if (!renderApiKey) {
+//       return res.status(500).json({
+//         success: false,
+//         message: 'Render API key not configured on server'
+//       });
+//     }
+
+//     // Extract repo details from GitHub URL
+//     // Format: https://github.com/username/repo-name
+//     const repoMatch = project.githubRepoLink.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+//     if (!repoMatch) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Invalid GitHub repository URL format'
+//       });
+//     }
+
+//     const [, repoOwner, repoName] = repoMatch;
+//     const cleanRepoName = repoName.replace('.git', '');
+
+//     console.log('Repo Owner:', repoOwner);
+//     console.log('Repo Name:', cleanRepoName);
+
+//     // Get user details for service name
+//     const user = await User.findById(req.userId).select('name githubUsername');
+    
+//     // Generate unique service name (Render requires unique names)
+//     const timestamp = Date.now();
+//     const serviceName = `${cleanRepoName}-${timestamp}`.toLowerCase()
+//       .replace(/[^a-z0-9-]/g, '-') // Remove invalid characters
+//       .substring(0, 60); // Render has a 60 character limit
+
+//     console.log('Service Name:', serviceName);
+
+//     // Prepare Render API request
+//     const renderApiUrl = 'https://api.render.com/v1/services';
+    
+//     const deploymentPayload = {
+//       type: 'web_service',
+//       name: serviceName,
+//       ownerId: null, // Will use default owner from API key
+//       repo: project.githubRepoLink,
+//       autoDeploy: 'yes',
+//       branch: 'main',
+//       serviceDetails: {
+//         env: 'node',
+//         buildCommand: 'npm install',
+//         startCommand: 'npm start',
+//         envVars: [
+//           {
+//             key: 'NODE_ENV',
+//             value: 'production'
+//           },
+//           {
+//             key: 'PORT',
+//             value: '10000'
+//           }
+//         ],
+//         plan: 'free',
+//         region: 'oregon',
+//         healthCheckPath: '/',
+//         numInstances: 1
+//       }
+//     };
+
+//     console.log('Deploying to Render...');
+//     console.log('Payload:', JSON.stringify(deploymentPayload, null, 2));
+
+//     // Make request to Render API
+//     const renderResponse = await axios.post(renderApiUrl, deploymentPayload, {
+//       headers: {
+//         'Authorization': `Bearer ${renderApiKey}`,
+//         'Content-Type': 'application/json'
+//       },
+//       timeout: 30000 // 30 second timeout
+//     });
+
+//     const service = renderResponse.data;
+    
+//     console.log('✅ Service created on Render');
+//     console.log('Service ID:', service.service?.id);
+//     console.log('Service URL:', service.service?.serviceDetails?.url);
+
+//     // Update project with deployment info
+//     project.renderServiceId = service.service?.id;
+//     project.deploymentUrl = service.service?.serviceDetails?.url;
+//     await project.save();
+
+//     // Send success response
+//     res.status(201).json({
+//       success: true,
+//       message: 'Successfully deployed to Render',
+//       data: {
+//         serviceId: service.service?.id,
+//         serviceName: service.service?.name,
+//         deploymentUrl: service.service?.serviceDetails?.url || `https://${serviceName}.onrender.com`,
+//         status: service.service?.serviceDetails?.deployStatus || 'deploying',
+//         region: service.service?.serviceDetails?.region,
+//         createdAt: service.service?.createdAt,
+//         githubRepo: project.githubRepoLink,
+//         autoDeploy: true,
+//         dashboard: `https://dashboard.render.com/web/${service.service?.id}`,
+//         logs: `https://dashboard.render.com/web/${service.service?.id}/logs`,
+//         settings: `https://dashboard.render.com/web/${service.service?.id}/settings`
+//       }
+//     });
+
+//   } catch (error) {
+//     console.error('❌ Error deploying to Render:', error);
+//     console.error('Error response:', error.response?.data);
+//     console.error('Error stack:', error.stack);
+
+//     // Handle specific Render API errors
+//     if (error.response?.status === 401) {
+//       return res.status(401).json({
+//         success: false,
+//         message: 'Invalid Render API key. Please check your configuration.'
+//       });
+//     }
+
+//     if (error.response?.status === 400) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Invalid deployment configuration',
+//         error: error.response?.data?.message || error.message
+//       });
+//     }
+
+//     if (error.response?.status === 409) {
+//       return res.status(409).json({
+//         success: false,
+//         message: 'Service with this name already exists on Render',
+//         error: error.response?.data?.message
+//       });
+//     }
+
+//     if (error.response?.status === 422) {
+//       return res.status(422).json({
+//         success: false,
+//         message: 'Validation error. Please check your GitHub repository settings.',
+//         error: error.response?.data?.message || 'Repository must be public or Render must have access'
+//       });
+//     }
+
+//     // Generic error response
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to deploy to Render',
+//       error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong',
+//       details: process.env.NODE_ENV === 'development' ? error.response?.data : undefined
+//     });
+//   }
+// };
+
+// /**
+//  * Get deployment status from Render
+//  * @route GET /api/v1/deploy/render/status/:projectId
+//  */
+// const getDeploymentStatus = async (req, res) => {
+//   try {
+//     const { projectId } = req.params;
+
+//     // Validate authentication
+//     if (!req.userId) {
+//       return res.status(401).json({
+//         success: false,
+//         message: 'User not authenticated'
+//       });
+//     }
+
+//     // Fetch project
+//     const project = await Project.findOne({
+//       _id: projectId,
+//       owner: req.userId
+//     });
+
+//     if (!project) {
+//       return res.status(404).json({
+//         success: false,
+//         message: 'Project not found or access denied'
+//       });
+//     }
+
+//     if (!project.renderServiceId) {
+//       return res.status(404).json({
+//         success: false,
+//         message: 'No deployment found for this project'
+//       });
+//     }
+
+//     // Validate Render API key
+//     const renderApiKey = process.env.RENDER_API_KEY;
+//     if (!renderApiKey) {
+//       return res.status(500).json({
+//         success: false,
+//         message: 'Render API key not configured on server'
+//       });
+//     }
+
+//     // Get service status from Render
+//     const renderApiUrl = `https://api.render.com/v1/services/${project.renderServiceId}`;
+    
+//     const renderResponse = await axios.get(renderApiUrl, {
+//       headers: {
+//         'Authorization': `Bearer ${renderApiKey}`
+//       },
+//       timeout: 15000
+//     });
+
+//     const service = renderResponse.data;
+
+//     res.status(200).json({
+//       success: true,
+//       data: {
+//         serviceId: service.service?.id,
+//         serviceName: service.service?.name,
+//         status: service.service?.serviceDetails?.deployStatus,
+//         deploymentUrl: service.service?.serviceDetails?.url || project.deploymentUrl,
+//         lastDeployedAt: service.service?.updatedAt,
+//         region: service.service?.serviceDetails?.region,
+//         dashboard: `https://dashboard.render.com/web/${project.renderServiceId}`
+//       }
+//     });
+
+//   } catch (error) {
+//     console.error('Error getting deployment status:', error);
+    
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to get deployment status',
+//       error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+//     });
+//   }
+// };
+
+// /**
+//  * Delete deployment from Render
+//  * @route DELETE /api/v1/deploy/render/:projectId
+//  */
+// const deleteDeployment = async (req, res) => {
+//   try {
+//     const { projectId } = req.params;
+
+//     // Validate authentication
+//     if (!req.userId) {
+//       return res.status(401).json({
+//         success: false,
+//         message: 'User not authenticated'
+//       });
+//     }
+
+//     // Fetch project
+//     const project = await Project.findOne({
+//       _id: projectId,
+//       owner: req.userId
+//     });
+
+//     if (!project) {
+//       return res.status(404).json({
+//         success: false,
+//         message: 'Project not found or access denied'
+//       });
+//     }
+
+//     if (!project.renderServiceId) {
+//       return res.status(404).json({
+//         success: false,
+//         message: 'No deployment found for this project'
+//       });
+//     }
+
+//     // Validate Render API key
+//     const renderApiKey = process.env.RENDER_API_KEY;
+//     if (!renderApiKey) {
+//       return res.status(500).json({
+//         success: false,
+//         message: 'Render API key not configured on server'
+//       });
+//     }
+
+//     // Delete service from Render
+//     const renderApiUrl = `https://api.render.com/v1/services/${project.renderServiceId}`;
+    
+//     await axios.delete(renderApiUrl, {
+//       headers: {
+//         'Authorization': `Bearer ${renderApiKey}`
+//       },
+//       timeout: 15000
+//     });
+
+//     // Update project - remove deployment info
+//     project.renderServiceId = undefined;
+//     project.deploymentUrl = undefined;
+//     await project.save();
+
+//     res.status(200).json({
+//       success: true,
+//       message: 'Deployment deleted successfully'
+//     });
+
+//   } catch (error) {
+//     console.error('Error deleting deployment:', error);
+    
+//     if (error.response?.status === 404) {
+//       // Service already deleted on Render, clean up our DB
+//       const project = await Project.findOne({
+//         _id: req.params.projectId,
+//         owner: req.userId
+//       });
+      
+//       if (project) {
+//         project.renderServiceId = undefined;
+//         project.deploymentUrl = undefined;
+//         await project.save();
+//       }
+
+//       return res.status(200).json({
+//         success: true,
+//         message: 'Deployment already deleted'
+//       });
+//     }
+    
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to delete deployment',
+//       error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+//     });
+//   }
+// };
+
+const createGithubRepo = async (req, res) => {
+  let tempDir = null;
+  
+  try {
+    console.log('=== CREATE GITHUB REPO WITH CODE ===');
+    console.log('User ID:', req.userId);
+    console.log('Project ID:', req.params.projectId);
+
+    const { projectId } = req.params;
+
+    const { Octokit } = await import('@octokit/rest');
+
+    if (!req.userId) {
+      return res.status(401).json({ success: false, message: 'User not authenticated' });
+    }
+
+    if (!projectId) {
+      return res.status(400).json({ success: false, message: 'Project ID is required' });
+    }
+
+    const user = await User.findById(req.userId).select('githubUsername githubAccessToken name');
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (!user.githubAccessToken || !user.githubUsername) {
+      return res.status(400).json({
+        success: false,
+        message: 'GitHub account not connected. Please connect your GitHub account first.',
+        requiresGithubAuth: true,
+      });
+    }
+
+    const project = await Project.findOne({ _id: projectId, owner: req.userId });
+    if (!project) {
+      return res.status(404).json({ success: false, message: 'Project not found or access denied' });
+    }
+
+    if (!project.name || project.name.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Project name is required to create repository',
+      });
+    }
+
+    console.log('📦 Generating project structure...');
+
+    const diagram = await Diagram.findOne({ projectId });
+    if (!diagram) {
+      return res.status(404).json({
+        success: false,
+        message: 'Diagram not found for this project. Please create a schema first.',
+      });
+    }
+
+    const folders = await Folder.find({ projectId });
+
+    const os = require('os');
+    tempDir = path.join(os.tmpdir(), 'github-projects', `project_${projectId}_${Date.now()}`);
+    const modelsDir = path.join(tempDir, 'models');
+    const routesDir = path.join(tempDir, 'routes');
+    const controllersDir = path.join(tempDir, 'controllers');
+
+    fs.mkdirSync(tempDir, { recursive: true });
+    fs.mkdirSync(modelsDir, { recursive: true });
+    fs.mkdirSync(routesDir, { recursive: true });
+    fs.mkdirSync(controllersDir, { recursive: true });
+
+    const allImports = new Set();
+    folders.forEach(folder => {
+      if (folder.imports && folder.imports.length > 0) {
+        folder.imports.forEach(imp => {
+          if (imp.type === 'npm') {
+            allImports.add(imp.module);
+          }
+        });
+      }
+    });
+
+    const modelNames = [];
+    if (diagram.generatedModels && diagram.generatedModels.length > 0) {
+      diagram.generatedModels.forEach(model => {
+        const modelFileName = `${model.entityName}.js`;
+        const modelFilePath = path.join(modelsDir, modelFileName);
+        fs.writeFileSync(modelFilePath, model.code);
+        modelNames.push(model.entityName);
+      });
+    }
+
+    const routeImports = [];
+    const generatedControllers = [];
+    const generatedRoutes = [];
+
+    folders.forEach(folder => {
+      if (folder.apis && folder.apis.length > 0) {
+        const controllerFileName = `${folder.name}Controller.js`;
+        const controllerFilePath = path.join(controllersDir, controllerFileName);
+        const controllerContent = generateControllerFromAPIs(folder);
+        fs.writeFileSync(controllerFilePath, controllerContent);
+        generatedControllers.push(controllerFileName);
+
+        const routeFileName = `${folder.name}Routes.js`;
+        const routeFilePath = path.join(routesDir, routeFileName);
+        const routeContent = generateRouteFromAPIs(folder);
+        fs.writeFileSync(routeFilePath, routeContent);
+        generatedRoutes.push(routeFileName);
+
+        routeImports.push({
+          name: folder.name,
+          fileName: routeFileName,
+          routeName: `${folder.name}Routes`,
+        });
+      }
+    });
+
+    const appJsContent = generateAppJsContent(routeImports);
+    const appJsPath = path.join(tempDir, 'app.js');
+    fs.writeFileSync(appJsPath, appJsContent);
+
+    const packageJsonContent = generatePackageJson(project.name, allImports);
+    const packageJsonPath = path.join(tempDir, 'package.json');
+    fs.writeFileSync(packageJsonPath, JSON.stringify(packageJsonContent, null, 2));
+
+    const gitignoreContent = generateGitignore();
+    const gitignorePath = path.join(tempDir, '.gitignore');
+    fs.writeFileSync(gitignorePath, gitignoreContent);
+
+    const envContent = generateEnvTemplate();
+    const envPath = path.join(tempDir, '.env');
+    fs.writeFileSync(envPath, envContent);
+    const envExamplePath = path.join(tempDir, '.env.example');
+    fs.writeFileSync(envExamplePath, envContent);
+
+    const readmeContent = generateReadme(project.name, user.name || user.githubUsername);
+    const readmePath = path.join(tempDir, 'README.md');
+    fs.writeFileSync(readmePath, readmeContent);
+
+    console.log('✅ Project structure generated successfully');
+
+    const repoName = project.name
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-zA-Z0-9-_.]/g, '')
+      .toLowerCase();
+
+    if (repoName.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Project name contains only invalid characters for GitHub repository',
+      });
+    }
+
+    console.log('Sanitized repo name:', repoName);
+
+    const octokit = new Octokit({ auth: user.githubAccessToken });
+
+    let githubUser;
+    try {
+      const { data, headers } = await octokit.users.getAuthenticated();
+      githubUser = data;
+      console.log('GitHub user verified:', githubUser.login);
+
+      const scopes = headers['x-oauth-scopes']?.split(', ') || [];
+      console.log('Available OAuth scopes:', scopes);
+
+      const hasRepoScope = scopes.includes('repo') || scopes.includes('public_repo');
+      if (!hasRepoScope) {
+        return res.status(403).json({
+          success: false,
+          message: 'Insufficient GitHub permissions. Please reconnect your GitHub account with repository access.',
+          requiresGithubAuth: true,
+          requiredScopes: ['repo'],
+          currentScopes: scopes,
+          authorizationUrl: `https://github.com/login/oauth/authorize?client_id=${process.env.GITHUB_CLIENT_ID}&scope=repo user:email`,
+        });
+      }
+    } catch (authError) {
+      console.error('GitHub authentication failed:', authError.message);
+      return res.status(401).json({
+        success: false,
+        message: 'GitHub authentication failed. Please reconnect your GitHub account.',
+        requiresGithubAuth: true,
+        error: authError.message,
+      });
+    }
+
+    let repoExists = false;
+    let existingRepo = null;
+    let repoHasCommits = false;
+
+    try {
+      const { data } = await octokit.repos.get({
+        owner: user.githubUsername,
+        repo: repoName,
+      });
+      repoExists = true;
+      existingRepo = data;
+
+      try {
+        await octokit.repos.getBranch({
+          owner: user.githubUsername,
+          repo: repoName,
+          branch: data.default_branch || 'main',
+        });
+        repoHasCommits = true;
+        console.log('✅ Repository already exists with commits');
+      } catch (branchError) {
+        if (branchError.status === 404) {
+          console.log('✅ Repository exists but is empty');
+          repoHasCommits = false;
+        } else {
+          throw branchError;
+        }
+      }
+    } catch (error) {
+      if (error.status !== 404) throw error;
+      console.log('Repository does not exist, will create new one');
+    }
+
+    let repo = existingRepo;
+
+    if (!repoExists) {
+      console.log('Creating repository...');
+      const createRepoResponse = await octokit.repos.createForAuthenticatedUser({
+        name: repoName,
+        description: project.description || `Generated backend API for ${project.name}`,
+        private: false,
+        auto_init: false,
+        has_issues: true,
+        has_projects: true,
+        has_wiki: true,
+      });
+      repo = createRepoResponse.data;
+      console.log('✅ Repository created successfully:', repo.html_url);
+    }
+
+    // ===== UPLOAD ALL FILES TO GITHUB (GIT TREE METHOD) =====
+    console.log('📤 Uploading files to GitHub using Git tree...');
+
+    const filesToUpload = getAllFiles(tempDir);
+    if (filesToUpload.length === 0) throw new Error('No files found to upload');
+
+    console.log(`Found ${filesToUpload.length} files to upload`);
+    const defaultBranch = repo.default_branch || 'main';
+
+    let baseCommitSha = null;
+    let baseTreeSha = null;
+
+    try {
+      const { data: refData } = await octokit.git.getRef({
+        owner: user.githubUsername,
+        repo: repoName,
+        ref: `heads/${defaultBranch}`,
+      });
+      baseCommitSha = refData.object.sha;
+
+      const { data: commitData } = await octokit.git.getCommit({
+        owner: user.githubUsername,
+        repo: repoName,
+        commit_sha: baseCommitSha,
+      });
+      baseTreeSha = commitData.tree.sha;
+    } catch {
+      console.log('Repo empty, initializing...');
+      const emptyTree = await octokit.git.createTree({
+        owner: user.githubUsername,
+        repo: repoName,
+        tree: [],
+      });
+      const emptyCommit = await octokit.git.createCommit({
+        owner: user.githubUsername,
+        repo: repoName,
+        message: 'Initial commit',
+        tree: emptyTree.data.sha,
+        parents: [],
+      });
+      await octokit.git.createRef({
+        owner: user.githubUsername,
+        repo: repoName,
+        ref: `refs/heads/${defaultBranch}`,
+        sha: emptyCommit.data.sha,
+      });
+      baseCommitSha = emptyCommit.data.sha;
+      baseTreeSha = emptyTree.data.sha;
+    }
+
+    console.log('📦 Creating blobs...');
+    const blobs = await Promise.all(
+      filesToUpload.map(async filePath => {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const blob = await octokit.git.createBlob({
+          owner: user.githubUsername,
+          repo: repoName,
+          content,
+          encoding: 'utf-8',
+        });
+        const relativePath = path.relative(tempDir, filePath).replace(/\\/g, '/');
+        return { path: relativePath, mode: '100644', type: 'blob', sha: blob.data.sha };
+      })
+    );
+
+    console.log('🌲 Creating Git tree...');
+    const { data: newTree } = await octokit.git.createTree({
+      owner: user.githubUsername,
+      repo: repoName,
+      base_tree: baseTreeSha,
+      tree: blobs,
+    });
+
+    console.log('📝 Creating commit...');
+    const { data: newCommit } = await octokit.git.createCommit({
+      owner: user.githubUsername,
+      repo: repoName,
+      message: 'Add generated project files',
+      tree: newTree.sha,
+      parents: [baseCommitSha],
+    });
+
+    console.log('🔄 Updating branch reference...');
+    await octokit.git.updateRef({
+      owner: user.githubUsername,
+      repo: repoName,
+      ref: `heads/${defaultBranch}`,
+      sha: newCommit.sha,
+      force: true,
+    });
+
+    console.log('✅ Files uploaded successfully using Git tree!');
+    project.githubRepoLink = repo.html_url;
+    await project.save();
+
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+      console.log('🧹 Cleaned up temp directory');
+    }
+
+    res.status(repoExists ? 200 : 201).json({
+      success: true,
+      message: repoExists
+        ? 'Code pushed to existing GitHub repository successfully'
+        : 'GitHub repository created and code pushed successfully',
+      data: {
+        repoName: repo.name,
+        repoFullName: repo.full_name,
+        repoUrl: repo.html_url,
+        cloneUrl: repo.clone_url,
+        sshUrl: repo.ssh_url,
+        description: repo.description,
+        isPrivate: repo.private,
+        createdAt: repo.created_at,
+        owner: {
+          username: repo.owner.login,
+          avatarUrl: repo.owner.avatar_url,
+          profileUrl: repo.owner.html_url,
+        },
+        filesUploaded: filesToUpload.length,
+        generatedFiles: {
+          models: modelNames.length,
+          routes: generatedRoutes.length,
+          controllers: generatedControllers.length,
+        },
+        repoAlreadyExisted: repoExists,
+      },
+    });
+  } catch (error) {
+    console.error('❌ Error creating GitHub repository:', error);
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create GitHub repository',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong',
+    });
+  }
+};
+
+// Helper: recursively get all files in directory
+function getAllFiles(dirPath, arrayOfFiles = []) {
+  const files = fs.readdirSync(dirPath);
+  files.forEach(file => {
+    const filePath = path.join(dirPath, file);
+    if (fs.statSync(filePath).isDirectory()) arrayOfFiles = getAllFiles(filePath, arrayOfFiles);
+    else arrayOfFiles.push(filePath);
+  });
+  return arrayOfFiles;
+}
+
 const generateProjectStructure = async (req, res) => {
   try {
     const { projectId, diagramId } = req.body;
@@ -541,25 +1853,59 @@ const generateProjectStructure = async (req, res) => {
     const readmeContent = generateReadme(project.name);
     const readmePath = path.join(tempDir, 'README.md');
     fs.writeFileSync(readmePath, readmeContent);
+// Create zip file
+    const zipFileName = `${project.name.replace(/\s+/g, '_')}_${Date.now()}.zip`;
+    const zipFilePath = path.join(process.cwd(), 'temp', zipFileName);
 
-    return res.status(200).json({
-      success: true,
-      message: 'Project structure generated successfully',
-      data: {
-        tempDir,
-        generatedFiles: {
-          models: modelNames,
-          routes: generatedRoutes,
-          controllers: generatedControllers,
-          appJs: 'app.js',
-          packageJson: 'package.json',
-          gitignore: '.gitignore',
-          env: '.env',
-          envExample: '.env.example',
-          readme: 'README.md'
-        }
-      }
+    // Create a file to stream archive data to
+    const output = fs.createWriteStream(zipFilePath);
+    const archive = archiver('zip', {
+      zlib: { level: 9 } // Sets the compression level
     });
+
+    // Listen for all archive data to be written
+    output.on('close', function() {
+      console.log(`Archive created: ${archive.pointer()} total bytes`);
+      
+      // Send the zip file
+      res.download(zipFilePath, zipFileName, (err) => {
+        if (err) {
+          console.error('Error sending file:', err);
+        }
+        
+        // Cleanup: delete temp directory and zip file after sending
+        setTimeout(() => {
+          try {
+            fs.rmSync(tempDir, { recursive: true, force: true });
+            fs.unlinkSync(zipFilePath);
+            console.log('Cleaned up temp files');
+          } catch (cleanupErr) {
+            console.error('Error cleaning up files:', cleanupErr);
+          }
+        }, 5000); // Wait 5 seconds before cleanup
+      });
+    });
+
+    // Handle archive errors
+    archive.on('error', function(err) {
+      console.error('Archive error:', err);
+      return res.status(500).json({
+        success: false,
+        message: 'Error creating zip file',
+        error: err.message
+      });
+    });
+
+    // Pipe archive data to the file
+    archive.pipe(output);
+
+    // Append files from the temp directory
+    archive.directory(tempDir, false);
+
+    // Finalize the archive
+    await archive.finalize();
+
+    
 
   } catch (error) {
     console.error('Error generating project structure:', error);
@@ -1008,5 +2354,10 @@ For issues or questions, please contact the development team.
 };
 
 module.exports = {
-  generateProjectStructure
+  generateProjectStructure,
+  createGithubRepo,
+  deployToRender,
+  getDeploymentStatus,
+  deleteDeployment,
+  deployToRenderWithBlueprint
 };

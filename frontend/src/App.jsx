@@ -7,7 +7,7 @@ import ProjectManager from "./pages/MyProjects";
 import { Editor } from "./pages/Editor";
 import { Project } from "./pages/Project";
 import ReactPlayground from "./pages/ReactPlayground";
-import { GitHubCallback } from "./components/GitHubCallback ";
+import { GitHubCallback } from "./components/GitHubCallback";
 import { useEffect } from "react";
 
 function ProtectedRoute({ children }) {

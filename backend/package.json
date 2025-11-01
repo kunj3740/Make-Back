@@ -1,10 +1,12 @@
 {
   "scripts": {
-    "dev": "nodemon app.js",
+    "dev": "nodemon --ignore temp/ app.js",
     "start": "node app.js",
     "build": "echo 'No build needed for JavaScript project'"
   },
   "dependencies": {
+    "@octokit/rest": "^18.12.0",
+    "archiver": "^7.0.1",
     "axios": "^1.9.0",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.7.0",
@@ -12,13 +14,16 @@
     "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "express-validator": "^7.2.1",
+    "i": "^0.3.7",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.15.2",
+    "npm": "^11.6.2",
+    "octokit": "^5.0.4",
     "openai": "^5.3.0",
     "uuid": "^8.3.2"
   },
   "devDependencies": {
-    "@mermaid-js/mermaid-cli": "^11.9.0",
+    "@mermaid-js/mermaid-cli": "^11.4.0",
     "puppeteer": "^23.11.1"
   }
 }

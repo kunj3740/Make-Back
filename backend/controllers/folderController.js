@@ -1308,6 +1308,135 @@ const getApiById = async (req, res) => {
 //     });
 //   }
 // };
+// const updateApi = async (req, res) => {
+//   try {
+//     const { folderId, apiId } = req.params;
+//     const updateData = req.body;
+//     console.log("Into the update api");
+
+//     const folder = await Folder.findOne({
+//       _id: folderId,
+//       userId: req.userId
+//     });
+
+//     if (!folder) {
+//       return res.status(404).json({
+//         success: false,
+//         message: 'Folder not found or access denied'
+//       });
+//     }
+
+//     const api = folder.apis.id(apiId);
+
+//     if (!api) {
+//       return res.status(404).json({
+//         success: false,
+//         message: 'API not found'
+//       });
+//     }
+
+//     // Check for duplicate name if name is being changed
+//     if (updateData.name && updateData.name.trim() !== api.name) {
+//       const existingApi = folder.apis.find(
+//         a => a._id.toString() !== apiId && 
+//              a.name.toLowerCase().trim() === updateData.name.toLowerCase().trim()
+//       );
+
+//       if (existingApi) {
+//         return res.status(409).json({
+//           success: false,
+//           message: 'An API with this name already exists in this folder'
+//         });
+//       }
+//     }
+
+//     // Check for duplicate endpoint if method or endpoint is being changed
+//     if (updateData.method || updateData.endpoint) {
+//       const newMethod = updateData.method ? updateData.method.toUpperCase() : api.method;
+//       const newEndpoint = updateData.endpoint || api.endpoint;
+
+//       const existingApi = folder.apis.find(
+//         a => a._id.toString() !== apiId && 
+//              a.method === newMethod && 
+//              a.endpoint === newEndpoint
+//       );
+
+//       if (existingApi) {
+//         return res.status(409).json({
+//           success: false,
+//           message: 'API endpoint already exists in this folder'
+//         });
+//       }
+//     }
+
+//     // Update allowed fields based on schema
+//     const allowedFields = [
+//       'name',
+//       'description',
+//       'method',
+//       'endpoint',
+//       'controllerCode',
+//       'controllerName',
+//       'testCases',
+//       'documentation'
+//     ];
+
+//     allowedFields.forEach(field => {
+//       if (updateData[field] !== undefined) {
+//         if (field === 'method' && updateData[field]) {
+//           api[field] = updateData[field].toUpperCase();
+//         } else if (field === 'name' && updateData[field]) {
+//           api[field] = updateData[field].trim();
+//         } else if (field === 'testCases' && Array.isArray(updateData[field])) {
+//           // Validate testCases structure
+//           api[field] = updateData[field].map(tc => ({
+//             name: tc.name,
+//             input: {
+//               params: tc.input?.params || {},
+//               query: tc.input?.query || {},
+//               body: tc.input?.body || {}
+//             },
+//             expectedOutput: {
+//               response: tc.expectedOutput?.response || {}
+//             },
+//             description: tc.description || ''
+//           }));
+//         } else if (field === 'documentation' && updateData[field]) {
+//           // Validate documentation structure
+//           api.documentation = {
+//             summary: updateData[field].summary || '',
+//             parameters: Array.isArray(updateData[field].parameters)
+//               ? updateData[field].parameters.map(param => ({
+//                   name: param.name,
+//                   type: param.type,
+//                   required: param.required || false,
+//                   description: param.description || '',
+//                   location: param.location || 'body'
+//                 }))
+//               : []
+//           };
+//         } else {
+//           api[field] = updateData[field];
+//         }
+//       }
+//     });
+
+//     await folder.save();
+
+//     res.json({
+//       success: true,
+//       message: 'API updated successfully',
+//       data: api
+//     });
+//   } catch (error) {
+//     console.error('Error updating API:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Error updating API',
+//       error: error.message
+//     });
+//   }
+// };
 const updateApi = async (req, res) => {
   try {
     const { folderId, apiId } = req.params;
@@ -1387,6 +1516,26 @@ const updateApi = async (req, res) => {
           api[field] = updateData[field].toUpperCase();
         } else if (field === 'name' && updateData[field]) {
           api[field] = updateData[field].trim();
+        } else if (field === 'controllerCode' && updateData[field]) {
+          // Clean and validate controllerCode format (SAME LOGIC AS createApi)
+          let cleanedControllerCode = updateData[field].trim();
+          
+          // If controllerCode starts with exports.functionName, extract just the function
+          const exportsMatch = cleanedControllerCode.match(/^exports\.(\w+)\s*=\s*(.+)$/s);
+          if (exportsMatch) {
+            const [, exportedName, functionCode] = exportsMatch;
+            // Get the controllerName to use (either being updated or existing)
+            const currentControllerName = updateData.controllerName 
+              ? updateData.controllerName.trim() 
+              : api.controllerName;
+            
+            // Use the exported name as controllerName if it matches
+            if (exportedName === currentControllerName) {
+              cleanedControllerCode = `const ${currentControllerName} = ${functionCode}`;
+            }
+          }
+          
+          api[field] = cleanedControllerCode;
         } else if (field === 'testCases' && Array.isArray(updateData[field])) {
           // Validate testCases structure
           api[field] = updateData[field].map(tc => ({

@@ -74,7 +74,7 @@ exports.googleAuth = async (req, res) => {
 exports.githubAuth = async (req, res) => {
   try {
     const { code, redirect_uri } = req.body
-    
+    console.log("in github auth")
     if (!code) return res.status(400).json({ message: 'Code is required' })
     
     // Exchange code for access token
@@ -143,3 +143,26 @@ exports.githubAuth = async (req, res) => {
     res.status(500).json({ message: 'GitHub authentication failed' })
   }
 } 
+
+exports.checkGithubConnection = async (req, res) => {
+  try {
+    const  userId  = req.userId
+    console.log(userId)
+    console.log("check")
+    const user = await User.findById(userId)
+
+    if (!user) return res.status(404).json({ message: 'User not found' })
+
+    if (user.githubAccessToken) {
+      return res.status(200).json({
+        connected: true,
+        githubUsername: user.githubUsername,
+        githubAccessToken: user.githubAccessToken,
+      })
+    } else {
+      return res.status(200).json({ connected: false })
+    }
+  } catch (err) {
+    res.status(500).json({ message: 'Error checking GitHub connection' })
+  }
+}
