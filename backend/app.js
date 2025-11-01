@@ -5,7 +5,7 @@ const cors = require('cors')
 const authRoutes = require('./routes/authRoutes')
 const projectRoutes = require("./routes/projectRoutes");
 const diagramRoutes = require("./routes/diagramRoutes");
-const AiRoutes = require("./routes/AiRoutes");
+const AIRoutes = require("../routes/AIRoutes");
 const folderRoutes = require("./routes/folderRoutes");
 const CompoGenRoutes = require("./routes/CompoGenRoutes");
 const CodeRoutes = require("./routes/CodeRoutes")
@@ -22,7 +22,7 @@ app.use('/api/v1/user', authRoutes)
 app.use('/api/v1/projects', projectRoutes)
 app.use('/api/v1/diagrams' , diagramRoutes)
 app.use('/api/v1/folders' , folderRoutes)
-app.use('/api/ai', AiRoutes);
+app.use('/api/ai', AIRoutes);
 app.use('/api/v1/components' , CompoGenRoutes)
 app.use('/api/v1/code' , CodeRoutes)
 
