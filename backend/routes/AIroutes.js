@@ -1,6 +1,6 @@
 const express = require('express');
-const { generateDatabaseSchema, chatWithAI, generateAPI, generateAPISuggestions, createAPIFromSuggestionName } = require('../controllers/AIController');
-const authMiddleware = require('../middleware/auth');
+// const { generateDatabaseSchema, chatWithAI, generateAPI, generateAPISuggestions, createAPIFromSuggestionName } = require('../controllers/AIController');
+// const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
  
