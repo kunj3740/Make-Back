@@ -13,7 +13,6 @@ router.post('/generate/apis/generation',authMiddleware , createAPIFromSuggestion
 
 // router.post('/generate/apis/creation',authMiddleware , generateAndCreateAPIs);
 
-// POST /api/ai/chat
 router.post('/chat', chatWithAI);
 
 router.post('/generate-api', generateAPI);
