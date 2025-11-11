@@ -1546,8 +1546,26 @@ const createGithubRepo = async (req, res) => {
         console.log('✅ Repository already exists with commits');
       } catch (branchError) {
         if (branchError.status === 404) {
-          console.log('⚠️ Repository exists but is empty (no commits)');
+          console.log('⚠️ Repository exists but is empty (no commits) - will delete and recreate');
           repoIsEmpty = true;
+          
+          // Delete the empty repository
+          try {
+            await octokit.repos.delete({
+              owner: user.githubUsername,
+              repo: repoName,
+            });
+            console.log('🗑️ Deleted empty repository');
+            
+            // Wait a moment for GitHub to process the deletion
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            repoExists = false;
+            existingRepo = null;
+          } catch (deleteError) {
+            console.error('Failed to delete empty repository:', deleteError.message);
+            throw new Error('Repository exists but is empty. Please delete it manually from GitHub and try again.');
+          }
         } else {
           throw branchError;
         }
@@ -1559,13 +1577,14 @@ const createGithubRepo = async (req, res) => {
 
     let repo = existingRepo;
 
+    // Create new repository if it doesn't exist
     if (!repoExists) {
-      console.log('Creating repository with auto_init...');
+      console.log('Creating repository with auto_init=true...');
       const createRepoResponse = await octokit.repos.createForAuthenticatedUser({
         name: repoName,
         description: project.description || `Generated backend API for ${project.name}`,
         private: false,
-        auto_init: true, // Changed to true to create initial commit
+        auto_init: true, // Initialize with README
         has_issues: true,
         has_projects: true,
         has_wiki: true,
@@ -1576,8 +1595,6 @@ const createGithubRepo = async (req, res) => {
       // Wait for GitHub to initialize the repository
       console.log('⏳ Waiting for GitHub to initialize repository...');
       await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      repoIsEmpty = false; // auto_init creates a commit, so it's not empty
     }
 
     // ===== UPLOAD ALL FILES TO GITHUB (GIT TREE METHOD) =====
@@ -1589,130 +1606,79 @@ const createGithubRepo = async (req, res) => {
     console.log(`Found ${filesToUpload.length} files to upload`);
     const defaultBranch = repo.default_branch || 'main';
 
+    // At this point, repo should always have commits (either existing or newly created with auto_init)
+    console.log('📥 Getting base commit and tree...');
+    
     let baseCommitSha = null;
     let baseTreeSha = null;
 
-    // Handle empty vs non-empty repositories differently
-    if (repoIsEmpty) {
-      console.log('🔧 Initializing empty repository with first commit...');
-      
-      // Create blobs for all files
-      console.log('📦 Creating blobs...');
-      const blobs = await Promise.all(
-        filesToUpload.map(async filePath => {
-          const content = fs.readFileSync(filePath, 'utf8');
-          const blob = await octokit.git.createBlob({
-            owner: user.githubUsername,
-            repo: repoName,
-            content,
-            encoding: 'utf-8',
-          });
-          const relativePath = path.relative(tempDir, filePath).replace(/\\/g, '/');
-          return { path: relativePath, mode: '100644', type: 'blob', sha: blob.data.sha };
-        })
-      );
-
-      // Create tree without base_tree (for empty repo)
-      console.log('🌲 Creating Git tree (no base)...');
-      const { data: newTree } = await octokit.git.createTree({
-        owner: user.githubUsername,
-        repo: repoName,
-        tree: blobs,
-      });
-
-      // Create initial commit (no parents)
-      console.log('📝 Creating initial commit...');
-      const { data: newCommit } = await octokit.git.createCommit({
-        owner: user.githubUsername,
-        repo: repoName,
-        message: 'Initial commit: Add generated project files',
-        tree: newTree.sha,
-        parents: [], // No parents for initial commit
-      });
-
-      // Create the branch reference
-      console.log('🔄 Creating branch reference...');
-      await octokit.git.createRef({
-        owner: user.githubUsername,
-        repo: repoName,
-        ref: `refs/heads/${defaultBranch}`,
-        sha: newCommit.sha,
-      });
-
-      console.log('✅ Initial commit created successfully!');
-
-    } else {
-      console.log('📥 Repository has commits, updating existing branch...');
-      
-      // Get current commit and tree
-      try {
-        const { data: refData } = await octokit.git.getRef({
-          owner: user.githubUsername,
-          repo: repoName,
-          ref: `heads/${defaultBranch}`,
-        });
-        baseCommitSha = refData.object.sha;
-
-        const { data: commitData } = await octokit.git.getCommit({
-          owner: user.githubUsername,
-          repo: repoName,
-          commit_sha: baseCommitSha,
-        });
-        baseTreeSha = commitData.tree.sha;
-        
-        console.log('✅ Found base commit and tree');
-      } catch (error) {
-        console.error('❌ Error getting base commit:', error.message);
-        throw new Error('Failed to get base commit from repository');
-      }
-
-      // Create blobs for all files
-      console.log('📦 Creating blobs...');
-      const blobs = await Promise.all(
-        filesToUpload.map(async filePath => {
-          const content = fs.readFileSync(filePath, 'utf8');
-          const blob = await octokit.git.createBlob({
-            owner: user.githubUsername,
-            repo: repoName,
-            content,
-            encoding: 'utf-8',
-          });
-          const relativePath = path.relative(tempDir, filePath).replace(/\\/g, '/');
-          return { path: relativePath, mode: '100644', type: 'blob', sha: blob.data.sha };
-        })
-      );
-
-      // Create tree with base_tree (for non-empty repo)
-      console.log('🌲 Creating Git tree (with base)...');
-      const { data: newTree } = await octokit.git.createTree({
-        owner: user.githubUsername,
-        repo: repoName,
-        base_tree: baseTreeSha,
-        tree: blobs,
-      });
-
-      // Create new commit with parent
-      console.log('📝 Creating commit...');
-      const { data: newCommit } = await octokit.git.createCommit({
-        owner: user.githubUsername,
-        repo: repoName,
-        message: 'Update: Add generated project files',
-        tree: newTree.sha,
-        parents: [baseCommitSha],
-      });
-
-      // Update branch reference
-      console.log('🔄 Updating branch reference...');
-      await octokit.git.updateRef({
+    try {
+      const { data: refData } = await octokit.git.getRef({
         owner: user.githubUsername,
         repo: repoName,
         ref: `heads/${defaultBranch}`,
-        sha: newCommit.sha,
-        force: true,
       });
+      baseCommitSha = refData.object.sha;
 
-      console.log('✅ Files uploaded successfully!');
+      const { data: commitData } = await octokit.git.getCommit({
+        owner: user.githubUsername,
+        repo: repoName,
+        commit_sha: baseCommitSha,
+      });
+      baseTreeSha = commitData.tree.sha;
+      
+      console.log('✅ Found base commit:', baseCommitSha.substring(0, 7));
+    } catch (error) {
+      console.error('❌ Error getting base commit:', error.message);
+      throw new Error('Failed to get base commit from repository. The repository may still be initializing. Please try again in a few seconds.');
     }
+
+    // Create blobs for all files
+    console.log('📦 Creating blobs...');
+    const blobs = await Promise.all(
+      filesToUpload.map(async filePath => {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const blob = await octokit.git.createBlob({
+          owner: user.githubUsername,
+          repo: repoName,
+          content,
+          encoding: 'utf-8',
+        });
+        const relativePath = path.relative(tempDir, filePath).replace(/\\/g, '/');
+        return { path: relativePath, mode: '100644', type: 'blob', sha: blob.data.sha };
+      })
+    );
+
+    // Create tree with base_tree
+    console.log('🌲 Creating Git tree...');
+    const { data: newTree } = await octokit.git.createTree({
+      owner: user.githubUsername,
+      repo: repoName,
+      base_tree: baseTreeSha,
+      tree: blobs,
+    });
+
+    // Create new commit with parent
+    console.log('📝 Creating commit...');
+    const { data: newCommit } = await octokit.git.createCommit({
+      owner: user.githubUsername,
+      repo: repoName,
+      message: 'Add generated project files',
+      tree: newTree.sha,
+      parents: [baseCommitSha],
+    });
+
+    // Update branch reference
+    console.log('🔄 Updating branch reference...');
+    await octokit.git.updateRef({
+      owner: user.githubUsername,
+      repo: repoName,
+      ref: `heads/${defaultBranch}`,
+      sha: newCommit.sha,
+      force: true,
+    });
+
+    console.log('✅ Files uploaded successfully!');
 
     project.githubRepoLink = repo.html_url;
     await project.save();
@@ -2785,3 +2751,4 @@ module.exports = {
   deployToRenderWithBlueprint
 
 };
+
