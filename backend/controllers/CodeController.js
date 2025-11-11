@@ -1338,7 +1338,6 @@ const deleteDeployment = async (req, res) => {
 //     });
 //   }
 // };
-
 const createGithubRepo = async (req, res) => {
   let tempDir = null;
   
@@ -1527,7 +1526,7 @@ const createGithubRepo = async (req, res) => {
 
     let repoExists = false;
     let existingRepo = null;
-    let repoHasCommits = false;
+    let repoIsEmpty = false;
 
     try {
       const { data } = await octokit.repos.get({
@@ -1543,12 +1542,12 @@ const createGithubRepo = async (req, res) => {
           repo: repoName,
           branch: data.default_branch || 'main',
         });
-        repoHasCommits = true;
+        repoIsEmpty = false;
         console.log('✅ Repository already exists with commits');
       } catch (branchError) {
         if (branchError.status === 404) {
-          console.log('✅ Repository exists but is empty');
-          repoHasCommits = false;
+          console.log('⚠️ Repository exists but is empty (no commits)');
+          repoIsEmpty = true;
         } else {
           throw branchError;
         }
@@ -1561,18 +1560,24 @@ const createGithubRepo = async (req, res) => {
     let repo = existingRepo;
 
     if (!repoExists) {
-      console.log('Creating repository...');
+      console.log('Creating repository with auto_init...');
       const createRepoResponse = await octokit.repos.createForAuthenticatedUser({
         name: repoName,
         description: project.description || `Generated backend API for ${project.name}`,
         private: false,
-        auto_init: false,
+        auto_init: true, // Changed to true to create initial commit
         has_issues: true,
         has_projects: true,
         has_wiki: true,
       });
       repo = createRepoResponse.data;
       console.log('✅ Repository created successfully:', repo.html_url);
+      
+      // Wait for GitHub to initialize the repository
+      console.log('⏳ Waiting for GitHub to initialize repository...');
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      repoIsEmpty = false; // auto_init creates a commit, so it's not empty
     }
 
     // ===== UPLOAD ALL FILES TO GITHUB (GIT TREE METHOD) =====
@@ -1587,86 +1592,128 @@ const createGithubRepo = async (req, res) => {
     let baseCommitSha = null;
     let baseTreeSha = null;
 
-    try {
-      const { data: refData } = await octokit.git.getRef({
-        owner: user.githubUsername,
-        repo: repoName,
-        ref: `heads/${defaultBranch}`,
-      });
-      baseCommitSha = refData.object.sha;
+    // Handle empty vs non-empty repositories differently
+    if (repoIsEmpty) {
+      console.log('🔧 Initializing empty repository with first commit...');
+      
+      // Create blobs for all files
+      console.log('📦 Creating blobs...');
+      const blobs = await Promise.all(
+        filesToUpload.map(async filePath => {
+          const content = fs.readFileSync(filePath, 'utf8');
+          const blob = await octokit.git.createBlob({
+            owner: user.githubUsername,
+            repo: repoName,
+            content,
+            encoding: 'utf-8',
+          });
+          const relativePath = path.relative(tempDir, filePath).replace(/\\/g, '/');
+          return { path: relativePath, mode: '100644', type: 'blob', sha: blob.data.sha };
+        })
+      );
 
-      const { data: commitData } = await octokit.git.getCommit({
+      // Create tree without base_tree (for empty repo)
+      console.log('🌲 Creating Git tree (no base)...');
+      const { data: newTree } = await octokit.git.createTree({
         owner: user.githubUsername,
         repo: repoName,
-        commit_sha: baseCommitSha,
+        tree: blobs,
       });
-      baseTreeSha = commitData.tree.sha;
-    } catch {
-      console.log('Repo empty, initializing...');
-      const emptyTree = await octokit.git.createTree({
+
+      // Create initial commit (no parents)
+      console.log('📝 Creating initial commit...');
+      const { data: newCommit } = await octokit.git.createCommit({
         owner: user.githubUsername,
         repo: repoName,
-        tree: [],
+        message: 'Initial commit: Add generated project files',
+        tree: newTree.sha,
+        parents: [], // No parents for initial commit
       });
-      const emptyCommit = await octokit.git.createCommit({
-        owner: user.githubUsername,
-        repo: repoName,
-        message: 'Initial commit',
-        tree: emptyTree.data.sha,
-        parents: [],
-      });
+
+      // Create the branch reference
+      console.log('🔄 Creating branch reference...');
       await octokit.git.createRef({
         owner: user.githubUsername,
         repo: repoName,
         ref: `refs/heads/${defaultBranch}`,
-        sha: emptyCommit.data.sha,
+        sha: newCommit.sha,
       });
-      baseCommitSha = emptyCommit.data.sha;
-      baseTreeSha = emptyTree.data.sha;
-    }
 
-    console.log('📦 Creating blobs...');
-    const blobs = await Promise.all(
-      filesToUpload.map(async filePath => {
-        const content = fs.readFileSync(filePath, 'utf8');
-        const blob = await octokit.git.createBlob({
+      console.log('✅ Initial commit created successfully!');
+
+    } else {
+      console.log('📥 Repository has commits, updating existing branch...');
+      
+      // Get current commit and tree
+      try {
+        const { data: refData } = await octokit.git.getRef({
           owner: user.githubUsername,
           repo: repoName,
-          content,
-          encoding: 'utf-8',
+          ref: `heads/${defaultBranch}`,
         });
-        const relativePath = path.relative(tempDir, filePath).replace(/\\/g, '/');
-        return { path: relativePath, mode: '100644', type: 'blob', sha: blob.data.sha };
-      })
-    );
+        baseCommitSha = refData.object.sha;
 
-    console.log('🌲 Creating Git tree...');
-    const { data: newTree } = await octokit.git.createTree({
-      owner: user.githubUsername,
-      repo: repoName,
-      base_tree: baseTreeSha,
-      tree: blobs,
-    });
+        const { data: commitData } = await octokit.git.getCommit({
+          owner: user.githubUsername,
+          repo: repoName,
+          commit_sha: baseCommitSha,
+        });
+        baseTreeSha = commitData.tree.sha;
+        
+        console.log('✅ Found base commit and tree');
+      } catch (error) {
+        console.error('❌ Error getting base commit:', error.message);
+        throw new Error('Failed to get base commit from repository');
+      }
 
-    console.log('📝 Creating commit...');
-    const { data: newCommit } = await octokit.git.createCommit({
-      owner: user.githubUsername,
-      repo: repoName,
-      message: 'Add generated project files',
-      tree: newTree.sha,
-      parents: [baseCommitSha],
-    });
+      // Create blobs for all files
+      console.log('📦 Creating blobs...');
+      const blobs = await Promise.all(
+        filesToUpload.map(async filePath => {
+          const content = fs.readFileSync(filePath, 'utf8');
+          const blob = await octokit.git.createBlob({
+            owner: user.githubUsername,
+            repo: repoName,
+            content,
+            encoding: 'utf-8',
+          });
+          const relativePath = path.relative(tempDir, filePath).replace(/\\/g, '/');
+          return { path: relativePath, mode: '100644', type: 'blob', sha: blob.data.sha };
+        })
+      );
 
-    console.log('🔄 Updating branch reference...');
-    await octokit.git.updateRef({
-      owner: user.githubUsername,
-      repo: repoName,
-      ref: `heads/${defaultBranch}`,
-      sha: newCommit.sha,
-      force: true,
-    });
+      // Create tree with base_tree (for non-empty repo)
+      console.log('🌲 Creating Git tree (with base)...');
+      const { data: newTree } = await octokit.git.createTree({
+        owner: user.githubUsername,
+        repo: repoName,
+        base_tree: baseTreeSha,
+        tree: blobs,
+      });
 
-    console.log('✅ Files uploaded successfully using Git tree!');
+      // Create new commit with parent
+      console.log('📝 Creating commit...');
+      const { data: newCommit } = await octokit.git.createCommit({
+        owner: user.githubUsername,
+        repo: repoName,
+        message: 'Update: Add generated project files',
+        tree: newTree.sha,
+        parents: [baseCommitSha],
+      });
+
+      // Update branch reference
+      console.log('🔄 Updating branch reference...');
+      await octokit.git.updateRef({
+        owner: user.githubUsername,
+        repo: repoName,
+        ref: `heads/${defaultBranch}`,
+        sha: newCommit.sha,
+        force: true,
+      });
+
+      console.log('✅ Files uploaded successfully!');
+    }
+
     project.githubRepoLink = repo.html_url;
     await project.save();
 
@@ -1715,6 +1762,382 @@ const createGithubRepo = async (req, res) => {
     });
   }
 };
+// const createGithubRepo = async (req, res) => {
+//   let tempDir = null;
+  
+//   try {
+//     console.log('=== CREATE GITHUB REPO WITH CODE ===');
+//     console.log('User ID:', req.userId);
+//     console.log('Project ID:', req.params.projectId);
+
+//     const { projectId } = req.params;
+
+//     const { Octokit } = await import('@octokit/rest');
+
+//     if (!req.userId) {
+//       return res.status(401).json({ success: false, message: 'User not authenticated' });
+//     }
+
+//     if (!projectId) {
+//       return res.status(400).json({ success: false, message: 'Project ID is required' });
+//     }
+
+//     const user = await User.findById(req.userId).select('githubUsername githubAccessToken name');
+//     if (!user) {
+//       return res.status(404).json({ success: false, message: 'User not found' });
+//     }
+
+//     if (!user.githubAccessToken || !user.githubUsername) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'GitHub account not connected. Please connect your GitHub account first.',
+//         requiresGithubAuth: true,
+//       });
+//     }
+
+//     const project = await Project.findOne({ _id: projectId, owner: req.userId });
+//     if (!project) {
+//       return res.status(404).json({ success: false, message: 'Project not found or access denied' });
+//     }
+
+//     if (!project.name || project.name.trim() === '') {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Project name is required to create repository',
+//       });
+//     }
+
+//     console.log('📦 Generating project structure...');
+
+//     const diagram = await Diagram.findOne({ projectId });
+//     if (!diagram) {
+//       return res.status(404).json({
+//         success: false,
+//         message: 'Diagram not found for this project. Please create a schema first.',
+//       });
+//     }
+
+//     const folders = await Folder.find({ projectId });
+
+//     const os = require('os');
+//     tempDir = path.join(os.tmpdir(), 'github-projects', `project_${projectId}_${Date.now()}`);
+//     const modelsDir = path.join(tempDir, 'models');
+//     const routesDir = path.join(tempDir, 'routes');
+//     const controllersDir = path.join(tempDir, 'controllers');
+
+//     fs.mkdirSync(tempDir, { recursive: true });
+//     fs.mkdirSync(modelsDir, { recursive: true });
+//     fs.mkdirSync(routesDir, { recursive: true });
+//     fs.mkdirSync(controllersDir, { recursive: true });
+
+//     const allImports = new Set();
+//     folders.forEach(folder => {
+//       if (folder.imports && folder.imports.length > 0) {
+//         folder.imports.forEach(imp => {
+//           if (imp.type === 'npm') {
+//             allImports.add(imp.module);
+//           }
+//         });
+//       }
+//     });
+
+//     const modelNames = [];
+//     if (diagram.generatedModels && diagram.generatedModels.length > 0) {
+//       diagram.generatedModels.forEach(model => {
+//         const modelFileName = `${model.entityName}.js`;
+//         const modelFilePath = path.join(modelsDir, modelFileName);
+//         fs.writeFileSync(modelFilePath, model.code);
+//         modelNames.push(model.entityName);
+//       });
+//     }
+
+//     const routeImports = [];
+//     const generatedControllers = [];
+//     const generatedRoutes = [];
+
+//     folders.forEach(folder => {
+//       if (folder.apis && folder.apis.length > 0) {
+//         const controllerFileName = `${folder.name}Controller.js`;
+//         const controllerFilePath = path.join(controllersDir, controllerFileName);
+//         const controllerContent = generateControllerFromAPIs(folder);
+//         fs.writeFileSync(controllerFilePath, controllerContent);
+//         generatedControllers.push(controllerFileName);
+
+//         const routeFileName = `${folder.name}Routes.js`;
+//         const routeFilePath = path.join(routesDir, routeFileName);
+//         const routeContent = generateRouteFromAPIs(folder);
+//         fs.writeFileSync(routeFilePath, routeContent);
+//         generatedRoutes.push(routeFileName);
+
+//         routeImports.push({
+//           name: folder.name,
+//           fileName: routeFileName,
+//           routeName: `${folder.name}Routes`,
+//         });
+//       }
+//     });
+
+//     const appJsContent = generateAppJsContent(routeImports);
+//     const appJsPath = path.join(tempDir, 'app.js');
+//     fs.writeFileSync(appJsPath, appJsContent);
+
+//     const packageJsonContent = generatePackageJson(project.name, allImports);
+//     const packageJsonPath = path.join(tempDir, 'package.json');
+//     fs.writeFileSync(packageJsonPath, JSON.stringify(packageJsonContent, null, 2));
+
+//     const gitignoreContent = generateGitignore();
+//     const gitignorePath = path.join(tempDir, '.gitignore');
+//     fs.writeFileSync(gitignorePath, gitignoreContent);
+
+//     const envContent = generateEnvTemplate();
+//     const envPath = path.join(tempDir, '.env');
+//     fs.writeFileSync(envPath, envContent);
+//     const envExamplePath = path.join(tempDir, '.env.example');
+//     fs.writeFileSync(envExamplePath, envContent);
+
+//     const readmeContent = generateReadme(project.name, user.name || user.githubUsername);
+//     const readmePath = path.join(tempDir, 'README.md');
+//     fs.writeFileSync(readmePath, readmeContent);
+
+//     console.log('✅ Project structure generated successfully');
+
+//     const repoName = project.name
+//       .trim()
+//       .replace(/\s+/g, '-')
+//       .replace(/[^a-zA-Z0-9-_.]/g, '')
+//       .toLowerCase();
+
+//     if (repoName.length === 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Project name contains only invalid characters for GitHub repository',
+//       });
+//     }
+
+//     console.log('Sanitized repo name:', repoName);
+
+//     const octokit = new Octokit({ auth: user.githubAccessToken });
+
+//     let githubUser;
+//     try {
+//       const { data, headers } = await octokit.users.getAuthenticated();
+//       githubUser = data;
+//       console.log('GitHub user verified:', githubUser.login);
+
+//       const scopes = headers['x-oauth-scopes']?.split(', ') || [];
+//       console.log('Available OAuth scopes:', scopes);
+
+//       const hasRepoScope = scopes.includes('repo') || scopes.includes('public_repo');
+//       if (!hasRepoScope) {
+//         return res.status(403).json({
+//           success: false,
+//           message: 'Insufficient GitHub permissions. Please reconnect your GitHub account with repository access.',
+//           requiresGithubAuth: true,
+//           requiredScopes: ['repo'],
+//           currentScopes: scopes,
+//           authorizationUrl: `https://github.com/login/oauth/authorize?client_id=${process.env.GITHUB_CLIENT_ID}&scope=repo user:email`,
+//         });
+//       }
+//     } catch (authError) {
+//       console.error('GitHub authentication failed:', authError.message);
+//       return res.status(401).json({
+//         success: false,
+//         message: 'GitHub authentication failed. Please reconnect your GitHub account.',
+//         requiresGithubAuth: true,
+//         error: authError.message,
+//       });
+//     }
+
+//     let repoExists = false;
+//     let existingRepo = null;
+//     let repoHasCommits = false;
+
+//     try {
+//       const { data } = await octokit.repos.get({
+//         owner: user.githubUsername,
+//         repo: repoName,
+//       });
+//       repoExists = true;
+//       existingRepo = data;
+
+//       try {
+//         await octokit.repos.getBranch({
+//           owner: user.githubUsername,
+//           repo: repoName,
+//           branch: data.default_branch || 'main',
+//         });
+//         repoHasCommits = true;
+//         console.log('✅ Repository already exists with commits');
+//       } catch (branchError) {
+//         if (branchError.status === 404) {
+//           console.log('✅ Repository exists but is empty');
+//           repoHasCommits = false;
+//         } else {
+//           throw branchError;
+//         }
+//       }
+//     } catch (error) {
+//       if (error.status !== 404) throw error;
+//       console.log('Repository does not exist, will create new one');
+//     }
+
+//     let repo = existingRepo;
+
+//     if (!repoExists) {
+//       console.log('Creating repository...');
+//       const createRepoResponse = await octokit.repos.createForAuthenticatedUser({
+//         name: repoName,
+//         description: project.description || `Generated backend API for ${project.name}`,
+//         private: false,
+//         auto_init: false,
+//         has_issues: true,
+//         has_projects: true,
+//         has_wiki: true,
+//       });
+//       repo = createRepoResponse.data;
+//       console.log('✅ Repository created successfully:', repo.html_url);
+//     }
+
+//     // ===== UPLOAD ALL FILES TO GITHUB (GIT TREE METHOD) =====
+//     console.log('📤 Uploading files to GitHub using Git tree...');
+
+//     const filesToUpload = getAllFiles(tempDir);
+//     if (filesToUpload.length === 0) throw new Error('No files found to upload');
+
+//     console.log(`Found ${filesToUpload.length} files to upload`);
+//     const defaultBranch = repo.default_branch || 'main';
+
+//     let baseCommitSha = null;
+//     let baseTreeSha = null;
+
+//     try {
+//       const { data: refData } = await octokit.git.getRef({
+//         owner: user.githubUsername,
+//         repo: repoName,
+//         ref: `heads/${defaultBranch}`,
+//       });
+//       baseCommitSha = refData.object.sha;
+
+//       const { data: commitData } = await octokit.git.getCommit({
+//         owner: user.githubUsername,
+//         repo: repoName,
+//         commit_sha: baseCommitSha,
+//       });
+//       baseTreeSha = commitData.tree.sha;
+//     } catch {
+//       console.log('Repo empty, initializing...');
+//       const emptyTree = await octokit.git.createTree({
+//         owner: user.githubUsername,
+//         repo: repoName,
+//         tree: [],
+//       });
+//       const emptyCommit = await octokit.git.createCommit({
+//         owner: user.githubUsername,
+//         repo: repoName,
+//         message: 'Initial commit',
+//         tree: emptyTree.data.sha,
+//         parents: [],
+//       });
+//       await octokit.git.createRef({
+//         owner: user.githubUsername,
+//         repo: repoName,
+//         ref: `refs/heads/${defaultBranch}`,
+//         sha: emptyCommit.data.sha,
+//       });
+//       baseCommitSha = emptyCommit.data.sha;
+//       baseTreeSha = emptyTree.data.sha;
+//     }
+
+//     console.log('📦 Creating blobs...');
+//     const blobs = await Promise.all(
+//       filesToUpload.map(async filePath => {
+//         const content = fs.readFileSync(filePath, 'utf8');
+//         const blob = await octokit.git.createBlob({
+//           owner: user.githubUsername,
+//           repo: repoName,
+//           content,
+//           encoding: 'utf-8',
+//         });
+//         const relativePath = path.relative(tempDir, filePath).replace(/\\/g, '/');
+//         return { path: relativePath, mode: '100644', type: 'blob', sha: blob.data.sha };
+//       })
+//     );
+
+//     console.log('🌲 Creating Git tree...');
+//     const { data: newTree } = await octokit.git.createTree({
+//       owner: user.githubUsername,
+//       repo: repoName,
+//       base_tree: baseTreeSha,
+//       tree: blobs,
+//     });
+
+//     console.log('📝 Creating commit...');
+//     const { data: newCommit } = await octokit.git.createCommit({
+//       owner: user.githubUsername,
+//       repo: repoName,
+//       message: 'Add generated project files',
+//       tree: newTree.sha,
+//       parents: [baseCommitSha],
+//     });
+
+//     console.log('🔄 Updating branch reference...');
+//     await octokit.git.updateRef({
+//       owner: user.githubUsername,
+//       repo: repoName,
+//       ref: `heads/${defaultBranch}`,
+//       sha: newCommit.sha,
+//       force: true,
+//     });
+
+//     console.log('✅ Files uploaded successfully using Git tree!');
+//     project.githubRepoLink = repo.html_url;
+//     await project.save();
+
+//     if (tempDir && fs.existsSync(tempDir)) {
+//       fs.rmSync(tempDir, { recursive: true, force: true });
+//       console.log('🧹 Cleaned up temp directory');
+//     }
+
+//     res.status(repoExists ? 200 : 201).json({
+//       success: true,
+//       message: repoExists
+//         ? 'Code pushed to existing GitHub repository successfully'
+//         : 'GitHub repository created and code pushed successfully',
+//       data: {
+//         repoName: repo.name,
+//         repoFullName: repo.full_name,
+//         repoUrl: repo.html_url,
+//         cloneUrl: repo.clone_url,
+//         sshUrl: repo.ssh_url,
+//         description: repo.description,
+//         isPrivate: repo.private,
+//         createdAt: repo.created_at,
+//         owner: {
+//           username: repo.owner.login,
+//           avatarUrl: repo.owner.avatar_url,
+//           profileUrl: repo.owner.html_url,
+//         },
+//         filesUploaded: filesToUpload.length,
+//         generatedFiles: {
+//           models: modelNames.length,
+//           routes: generatedRoutes.length,
+//           controllers: generatedControllers.length,
+//         },
+//         repoAlreadyExisted: repoExists,
+//       },
+//     });
+//   } catch (error) {
+//     console.error('❌ Error creating GitHub repository:', error);
+//     if (tempDir && fs.existsSync(tempDir)) {
+//       fs.rmSync(tempDir, { recursive: true, force: true });
+//     }
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to create GitHub repository',
+//       error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong',
+//     });
+//   }
+// };
 
 // Helper: recursively get all files in directory
 function getAllFiles(dirPath, arrayOfFiles = []) {
@@ -2360,4 +2783,5 @@ module.exports = {
   getDeploymentStatus,
   deleteDeployment,
   deployToRenderWithBlueprint
+
 };
