@@ -8,6 +8,6 @@ router.post('/generate-schema', generateDatabaseSchema);
 router.post('/generate/apis/suggestion',auth , generateAPISuggestions);
 router.post('/generate/apis/generation',auth , createAPIFromSuggestionName);
 router.post('/chat', chatWithAI);
-router.post('/generate-api', generateAPI);
+router.post('/generate-api', auth, generateAPI);
 
 module.exports = router

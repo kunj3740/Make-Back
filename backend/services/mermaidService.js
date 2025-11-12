@@ -119,7 +119,7 @@ class MermaidController {
       console.log(`🔄 Executing: ${command}`);
       
       const { stdout, stderr } = await execAsync(command, {
-        timeout: 30000, // 30 seconds timeout
+        timeout: 50000, // 30 seconds timeout
         cwd: process.cwd()
       });
 
