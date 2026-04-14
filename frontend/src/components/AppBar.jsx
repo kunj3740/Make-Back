@@ -51,7 +51,7 @@ export default function AppBar() {
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         isScrolled
-          ? "bg-gray-900/80 backdrop-blur-xl border-b border-gray-700/50 shadow-lg shadow-black/10"
+          ? "bg-[#090514]/80 backdrop-blur-xl border-b border-purple-900/30 shadow-lg shadow-[#090514]/50"
           : "bg-transparent"
       }`}
     >
@@ -62,7 +62,7 @@ export default function AppBar() {
             to="/"
             className="flex items-center space-x-2 group cursor-pointer"
           >
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg group-hover:shadow-blue-500/25 transition-all duration-200">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg transition-all duration-200" style={{ background: "linear-gradient(to bottom right, #6b21a8, #581c87)", boxShadow: "0 4px 14px rgba(88, 28, 135, 0.4)" }}>
               <Sparkles className="w-4 h-4 text-white" />
             </div>
             <span className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
@@ -82,10 +82,10 @@ export default function AppBar() {
                   >
                     <div className="relative">
                       <Folder className="w-4 h-4 group-hover:opacity-0 transition-opacity duration-200" />
-                      <FolderOpen className="w-4 h-4 absolute inset-0 opacity-0 group-hover:opacity-100 text-blue-400 transition-all duration-200" />
+                      <FolderOpen className="w-4 h-4 absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-200" style={{ color: "#6b21a8" }} />
                     </div>
                     <span className="font-medium">My Projects</span>
-                    <div className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-blue-500 to-purple-600 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-full"></div>
+                    <div className="absolute inset-x-0 bottom-0 h-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-full" style={{ background: "linear-gradient(to right, #6b21a8, #581c87)" }}></div>
                   </Link>
                 </nav>
 
@@ -106,15 +106,15 @@ export default function AppBar() {
                       variant="ghost"
                       className="relative h-10 w-10 rounded-full hover:bg-gray-800/50 transition-colors duration-200"
                     >
-                      <Avatar className="h-10 w-10 ring-2 ring-transparent hover:ring-blue-500/30 transition-all duration-200">
-                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white font-semibold text-sm">
+                      <Avatar className="h-10 w-10 ring-2 ring-transparent hover:ring-purple-500/30 transition-all duration-200">
+                        <AvatarFallback className="bg-gradient-to-br from-purple-500 to-fuchsia-600 text-white font-semibold text-sm">
                           {getUserInitial()}
                         </AvatarFallback>
                       </Avatar>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
-                    className="w-48 mt-2 bg-gray-900/95 backdrop-blur-xl border border-gray-700/50 shadow-xl"
+                    className="w-48 mt-2 bg-[#090514]/95 backdrop-blur-xl border border-purple-900/30 shadow-xl"
                     align="end"
                   >
                     <div className="px-3 py-2 border-b border-gray-700/50">
@@ -140,7 +140,7 @@ export default function AppBar() {
             ) : (
               // Log In Button
               <Link to="/signin">
-                <Button className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-2 rounded-lg transition-all duration-200 shadow-lg hover:shadow-blue-500/25">
+                <Button className="text-white font-medium px-6 py-2 rounded-lg transition-all duration-200 shadow-lg" style={{ background: "linear-gradient(to right, #6b21a8, #581c87)", boxShadow: "0 4px 14px rgba(88, 28, 135, 0.3)" }} onMouseOver={(e) => e.currentTarget.style.background = "linear-gradient(to right, #581c87, #4c1d95)"} onMouseOut={(e) => e.currentTarget.style.background = "linear-gradient(to right, #6b21a8, #581c87)"}>
                   Log In
                 </Button>
               </Link>
