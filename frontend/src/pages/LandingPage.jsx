@@ -2579,7 +2579,7 @@ export default function App() {
               transition={{ duration: 1, ease: "easeOut" }}
               className="text-center"
             >
-              <span className="label mb-6 block">QUANTUM ENGINE ACTIVE</span>
+              <span className="label mb-6 block">LET'S BUILD</span>
               <h1 className="text-6xl md:text-[140px] font-display font-black tracking-tighter mb-8 text-glow leading-[0.8] mt-[100px]">
                 Build <span className="font-serif italic font-medium text-accent">Backends</span> <br />
                 Intelligently.
@@ -2644,7 +2644,7 @@ export default function App() {
           <Section id="features">
             <div className="w-full">
               <div className="text-center mb-20">
-                <span className="label mb-4 block">SYSTEM_CORE_V2</span>
+                <span className="label mb-4 block">SYSTEM_CORE</span>
                 <h2 className="text-5xl md:text-7xl font-display font-black mb-6">Everything You Need to <br /> <span className="text-accent">Build Modern Backends</span></h2>
                 <p className="text-white/40 text-lg max-w-2xl mx-auto">
                   From visual schema design to AI-powered API generation, Make-Back provides all the tools you need.
@@ -2670,7 +2670,7 @@ export default function App() {
                     <div className="w-12 h-12 rounded-2xl bg-accent/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                       <feature.icon className="text-accent" size={24} />
                     </div>
-                    <span className="label text-[8px] mb-2 block opacity-50">{feature.tag}</span>
+                    <span className="label text-[8px] mb-2 block ">{feature.tag}</span>
                     <h3 className="text-xl font-bold mb-3">{feature.title}</h3>
                     <p className="text-sm text-white/40 leading-relaxed">{feature.desc}</p>
                   </motion.div>
@@ -2685,7 +2685,6 @@ export default function App() {
               <div className="flex flex-col md:flex-row gap-20 items-start">
                 {/* Left: Sticky Header */}
                 <div className="md:sticky md:top-32 w-full md:w-1/3">
-                  <span className="label mb-4 block">SYNTHESIS_PROTOCOL</span>
                   <h2 className="text-5xl md:text-7xl font-display font-black mb-8 leading-[0.9]">
                     How We <br />
                     <span className="text-accent">Manifest</span> <br />
@@ -2697,7 +2696,7 @@ export default function App() {
                   <div className="hidden md:block p-6 glass rounded-2xl border-accent/20">
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-                      <span className="label text-[8px]">CORE_ENGINE_STATUS: OPTIMAL</span>
+                      <span className="label text-[8px]">AGENT READY TO BUILD</span>
                     </div>
                     <div className="space-y-2">
                       <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
@@ -2765,7 +2764,7 @@ export default function App() {
                             <step.icon size={24} />
                           </div>
                           <div>
-                            <span className="label text-[8px] opacity-50">{step.phase}</span>
+                            <span className="label text-[8px] ">{step.phase}</span>
                             <h3 className="text-2xl font-bold">{step.title}</h3>
                           </div>
                         </div>
