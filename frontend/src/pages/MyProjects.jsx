@@ -82,7 +82,7 @@ export default function ProjectManager() {
     // If coming from landing page with a manifest query param, pre-fill and open modal
     const manifestName = searchParams.get("manifest")
     if (manifestName) {
-      setNewProject({ name: manifestName, description: "" })
+      setNewProject({ name: "", description: manifestName })
       setShowCreateModal(true)
     }
   }, [])
