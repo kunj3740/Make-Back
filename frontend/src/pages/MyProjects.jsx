@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import axios from "axios"
 import toast from "react-hot-toast"
 import { BACKEND_URL } from "../config"
@@ -44,6 +44,7 @@ export default function ProjectManager() {
   const [searchTerm, setSearchTerm] = useState("")
 
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   const token = localStorage.getItem("token")
   const headers = {
@@ -72,10 +73,18 @@ export default function ProjectManager() {
   }
 
   useEffect(() => {
-    if ( !token ){
+    if (!token) {
       navigate("/signin")
+      return
     }
     fetchProjects()
+
+    // If coming from landing page with a manifest query param, pre-fill and open modal
+    const manifestName = searchParams.get("manifest")
+    if (manifestName) {
+      setNewProject({ name: manifestName, description: "" })
+      setShowCreateModal(true)
+    }
   }, [])
 
   // POST new project

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, Suspense } from "react"
+import { useNavigate } from "react-router-dom"
 import {
    Sparkles, Rocket, Zap, Shield, Brain, Database, Code,
   ChevronDown, Menu, X, Github, Twitter, MessageCircle as Discord
@@ -403,10 +404,19 @@ export default function App() {
   const containerRef = useRef(null)
   const [manifestInput, setManifestInput] = useState("")
   const [isManifesting, setIsManifesting] = useState(false)
+  const navigate = useNavigate()
 
   const handleManifest = () => {
     if (!manifestInput) return
     setIsManifesting(true)
+    
+    const token = localStorage.getItem("token")
+    if (token) {
+      navigate(`/projects?manifest=${encodeURIComponent(manifestInput)}`)
+    } else {
+      navigate("/signin")
+    }
+    
     setTimeout(() => setIsManifesting(false), 2000)
   }
 
